@@ -9,15 +9,18 @@ const HOUSE_SPACING := 390.0
 const HOUSE_MARGIN := 520.0
 const WORLD_H := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (HOUSE_COUNT - 1)
 const WORLD_W := 1800.0
-const ROAD_HALF := 70.0
-const WALK_W := 46.0
-const HOUSE_W := 150.0
-const HOUSE_D := 170.0
+const ROAD_HALF := 62.0
+const WALK_W := 38.0
+const HOUSE_W := 126.0
+const HOUSE_D := 144.0
 const YARD_GAP := 80.0
 const WALK_SPEED := 380.0
 const STICK_RANGE := 110.0
 const DEADZONE := 0.12
-const NEAR_DIST := 120.0
+const NEAR_DIST := 150.0
+const DRIVEWAY_HALF := 30.0
+const WORLD_TILT := 0.84
+const WALK_WORLD_SCALE := 0.90
 const TUFTS := 46
 const INCH_PX := 4.5
 const WALKER_K := 1.4
@@ -81,6 +84,10 @@ var _pet_stations: Array = []
 ## -1 = left sidewalk, 0 = road center, 1 = right sidewalk.
 var _main_lane := 1
 var _lane_switch_ready := true
+var _world_scale := 1.0
+var _camera_flash := 0.0
+var _photo_message := ""
+var _photo_message_t := 0.0
 
 
 func _ready() -> void:
@@ -229,8 +236,12 @@ func _enter_near() -> void:
 
 
 func _tap_flag(pos: Vector2) -> bool:
+	if pos.distance_to(Vector2(size.x - 66.0, size.y - 72.0)) <= 48.0:
+		_take_photo.call_deferred()
+		return true
 	if pos.x >= size.x - 206.0 and pos.y <= 296.0:
 		return true
+	pos = _screen_to_world_draw(pos)
 	for i in HOUSE_COUNT:
 		var kind: String = _pins.get(i, "")
 		if kind != "lawn" and kind != "card":
@@ -256,7 +267,7 @@ func _process(delta: float) -> void:
 		var velocity := move.normalized() * WALK_SPEED * strength
 		var previous := Vector2(_player_x, _player_y)
 		var candidate := previous + velocity * delta
-		candidate.y = clampf(candidate.y, 140.0, WORLD_H - 140.0)
+		candidate.y = fposmod(candidate.y, WORLD_H)
 		var road_center := _road_x(candidate.y)
 		var closest_junction := float(JUNCTIONS[0])
 		for junction in JUNCTIONS:
@@ -265,17 +276,24 @@ func _process(delta: float) -> void:
 		var connector_x := _closest_connector(candidate.x)
 		var on_connector := absf(candidate.x - connector_x) < ROAD_HALF + WALK_W and candidate.y > float(JUNCTIONS[0]) - 120.0 and candidate.y < float(JUNCTIONS[3]) + 120.0
 		var on_side_street := absf(candidate.x - road_center) > ROAD_HALF + WALK_W and absf(candidate.y - closest_junction) < 150.0
+		var driveway_house := _driveway_at(candidate)
 		if on_connector and absf(candidate.y - closest_junction) >= 115.0:
 			candidate.x = clampf(candidate.x, connector_x - ROAD_HALF - WALK_W * 0.72,
 					connector_x + ROAD_HALF + WALK_W * 0.72)
+		elif driveway_house >= 0:
+			# Driveways connect each sidewalk to its front door, so the player can
+			# leave the walking lane only where the neighborhood visually supports it.
+			var home := _house_c(driveway_house)
+			candidate.y = clampf(candidate.y, home.y - DRIVEWAY_HALF, home.y + DRIVEWAY_HALF)
+			candidate.x = clampf(candidate.x, minf(home.x, road_center) - 18.0, maxf(home.x, road_center) + 18.0)
 		elif on_side_street:
 			candidate.y = clampf(candidate.y, closest_junction - ROAD_HALF - WALK_W * 0.65,
 					closest_junction + ROAD_HALF + WALK_W * 0.65)
-			candidate.x = clampf(candidate.x, 120.0, WORLD_W - 120.0)
+			candidate.x = fposmod(candidate.x, WORLD_W)
 		elif absf(candidate.y - closest_junction) < 115.0:
 			# The intersection is the only free-turn area. Moving beyond its outer
 			# sidewalk enters a side street instead of being clamped to the main road.
-			candidate.x = clampf(candidate.x, 120.0, WORLD_W - 120.0)
+			candidate.x = fposmod(candidate.x, WORLD_W)
 		else:
 			_update_main_lane(move.x)
 			var target_x := road_center + float(_main_lane) * SIDEWALK_CENTER
@@ -288,16 +306,45 @@ func _process(delta: float) -> void:
 		_moving = true
 	else:
 		_moving = false
+	_world_scale = lerpf(_world_scale, WALK_WORLD_SCALE if _moving else 1.0, 1.0 - exp(-5.0 * delta))
+	_camera_flash = maxf(0.0, _camera_flash - delta * 3.5)
+	_photo_message_t = maxf(0.0, _photo_message_t - delta)
 	_angle = lerp_angle(_angle, _face, 1.0 - exp(-12.0 * delta))
 	_cam = clampf(_player_y - size.y * 0.58, 0.0, maxf(0.0, WORLD_H - size.y))
 	_cam_x = clampf(_player_x - size.x * 0.5, 0.0, maxf(0.0, WORLD_W - size.x))
 	_near = -1
 	var best := NEAR_DIST
 	for i in HOUSE_COUNT:
-		var d := absf(_player_y - house_y(i))
+		var d := Vector2(_player_x, _player_y).distance_to(_house_c(i))
 		if d < best:
 			best = d
 			_near = i
+	queue_redraw()
+
+
+func _driveway_at(point: Vector2) -> int:
+	for i in HOUSE_COUNT:
+		var home := _house_c(i)
+		if absf(point.y - home.y) <= DRIVEWAY_HALF:
+			var road := _road_x(home.y)
+			if point.x >= minf(home.x, road) - 18.0 and point.x <= maxf(home.x, road) + 18.0:
+				return i
+	return -1
+
+
+func _screen_to_world_draw(point: Vector2) -> Vector2:
+	var center := Vector2(size.x * 0.5, size.y * 0.54)
+	var scale := Vector2(_world_scale, _world_scale * WORLD_TILT)
+	return center + (point - center) / scale
+
+
+func _take_photo() -> void:
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
+	var path := "user://hoa-photo-%s.png" % stamp
+	var error := get_viewport().get_texture().get_image().save_png(path)
+	_photo_message = "PHOTO SAVED" if error == OK else "CAMERA ERROR"
+	_photo_message_t = 2.2
+	_camera_flash = 1.0 if error == OK else 0.0
 	queue_redraw()
 
 
@@ -361,6 +408,9 @@ func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	var cx := w * 0.5
+	var world_center := Vector2(cx, h * 0.54)
+	draw_set_transform(world_center * (Vector2.ONE - Vector2(_world_scale, _world_scale * WORLD_TILT)),
+			0.0, Vector2(_world_scale, _world_scale * WORLD_TILT))
 	_draw_ground(w, h, cx)
 	_draw_ambience(w, h)
 	_draw_pet_stations()
@@ -377,7 +427,10 @@ func _draw() -> void:
 			_ellipse(tc + sh * 0.9, t.r, t.r, Color(0, 0, 0, 0.18))
 	for i in HOUSE_COUNT:
 		if _on_screen(house_y(i), 320.0):
-			_draw_house(i, sh)
+			var focus_scale := 1.20 if i == _near else 1.0
+			_set_world_transform(_house_c(i) - Vector2(_cam_x, _cam), focus_scale)
+			_draw_house(i, sh / focus_scale)
+			_set_world_transform()
 	for t in _trees:
 		if _on_screen(t.y):
 			var sway := sin(_time * 1.3 + float(t.phase)) * 3.0
@@ -397,7 +450,19 @@ func _draw() -> void:
 		draw_rect(Rect2(0, 0, w, h), Color(0.12, 0.1, 0.32, 0.4 * _dusk))
 	if _gloom > 0.0:
 		draw_rect(Rect2(0, 0, w, h), Color(0.25, 0.27, 0.32, 0.4 * _gloom))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_ui(w, h)
+	if _camera_flash > 0.0:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, _camera_flash * 0.72))
+
+
+func _set_world_transform(focus := Vector2.ZERO, focus_scale := 1.0) -> void:
+	var base_scale := Vector2(_world_scale, _world_scale * WORLD_TILT)
+	var center := Vector2(size.x * 0.5, size.y * 0.54)
+	var origin := center * (Vector2.ONE - base_scale)
+	if focus_scale != 1.0:
+		origin += base_scale * focus * (1.0 - focus_scale)
+	draw_set_transform(origin, 0.0, base_scale * focus_scale)
 
 
 func _draw_ground(w: float, h: float, cx: float) -> void:
@@ -432,6 +497,19 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 			draw_rect(Rect2(-_cam_x, sy + ROAD_HALF, WORLD_W, WALK_W), walk)
 			for wx in range(0, int(WORLD_W), 90):
 				draw_line(Vector2(wx - _cam_x, sy), Vector2(wx + 44.0 - _cam_x, sy), Color("ffe08a", 0.7), 4.0)
+	# Curving residential lanes break up the grid and make the neighborhood feel
+	# grown-in. They meet the main avenue at their ends and weave through blocks.
+	for lane_i in 3:
+		var lane := PackedVector2Array()
+		var lane_y := WORLD_H * (0.27 + lane_i * 0.23)
+		for point_i in 15:
+			var t := float(point_i) / 14.0
+			var wx := 90.0 + t * (WORLD_W - 180.0)
+			var wy := lane_y + sin(t * TAU * 1.5 + lane_i * 1.7) * (72.0 + lane_i * 9.0)
+			lane.append(Vector2(wx - _cam_x, wy - _cam))
+		draw_polyline(lane, walk, ROAD_HALF * 2.0 + WALK_W * 2.0, true)
+		draw_polyline(lane, road, ROAD_HALF * 2.0, true)
+		draw_polyline(lane, Color("ffe08a", 0.68), 4.0, true)
 	for connector_i in CONNECTOR_XS.size():
 		for junction_i in range(connector_i, JUNCTIONS.size(), 2):
 			var circle_c := Vector2(float(CONNECTOR_XS[connector_i]) - _cam_x, float(JUNCTIONS[junction_i]) - _cam)
@@ -619,6 +697,12 @@ func _yard_rect(i: int) -> Rect2:
 
 func _draw_yard(i: int) -> void:
 	var r := _yard_rect(i)
+	var home := _house_c(i)
+	var road_x := _road_x(home.y)
+	var drive_start := Vector2(road_x - _cam_x, home.y - _cam)
+	var drive_end := Vector2(home.x - _side(i) * HOUSE_W * 0.46 - _cam_x, home.y - _cam)
+	draw_line(drive_start, drive_end, Color("b8b3a8").lerp(Color("686477"), _dusk * 0.5), DRIVEWAY_HALF * 1.55, true)
+	draw_line(drive_start, drive_end, Color(1, 1, 1, 0.16), 3.0, true)
 	var inches: float = _grass[i]
 	var tall := clampf((inches - 3.0) / 7.0, 0.0, 1.0)
 	_rr(r, Color("3f9e60").lerp(Color("b2b04a"), tall * 0.5).lerp(Color("1c5a3e"), _dusk * 0.5), 10)
@@ -704,11 +788,16 @@ func _draw_highlight(i: int) -> void:
 		return
 	var c := _house_c(i) - Vector2(_cam_x, _cam)
 	var pulse := 0.5 + 0.5 * sin(_time * 6.0)
-	var rect := Rect2(c.x - HOUSE_W * 0.5, c.y - HOUSE_D * 0.5, HOUSE_W, HOUSE_D).grow(10.0 + pulse * 4.0)
+	var rect := Rect2(c.x - HOUSE_W * 0.62, c.y - HOUSE_D * 0.62, HOUSE_W * 1.24, HOUSE_D * 1.24).grow(12.0 + pulse * 5.0)
 	var active: bool = _pins.get(i, "") in ["lawn", "card"]
 	var col := Color("ffd36e") if active else Color(1, 1, 1, 0.8)
 	draw_rect(rect, Color(col, 0.12 + 0.08 * pulse))
 	draw_rect(rect, Color(col, 0.95), false, 5.0)
+	if active:
+		var tag := Rect2(c.x - 58.0, rect.position.y - 36.0, 116.0, 30.0)
+		_rr(tag, Color("e0533d"), 8)
+		draw_string(ThemeDB.fallback_font, tag.position + Vector2(0.0, 22.0), "VIOLATION",
+				HORIZONTAL_ALIGNMENT_CENTER, tag.size.x, 17, Color.WHITE)
 
 
 func _draw_pin(i: int) -> void:
@@ -785,6 +874,13 @@ func _chevron(c: Vector2, up: bool, alpha: float) -> void:
 func _draw_ui(w: float, h: float) -> void:
 	var font := ThemeDB.fallback_font
 	_draw_map(Rect2(w - 206.0, 16.0, 190.0, 280.0))
+	var camera_c := Vector2(w - 66.0, h - 72.0)
+	draw_circle(camera_c + Vector2(3.0, 5.0), 42.0, Color(0, 0, 0, 0.25))
+	draw_circle(camera_c, 42.0, Color("f4ecd8"))
+	_rr(Rect2(camera_c - Vector2(25.0, 17.0), Vector2(50.0, 36.0)), Color("273444"), 7)
+	_rr(Rect2(camera_c + Vector2(-13.0, -24.0), Vector2(26.0, 10.0)), Color("273444"), 4)
+	draw_circle(camera_c + Vector2(0.0, 1.0), 12.0, Color("71b9dc"))
+	draw_circle(camera_c + Vector2(0.0, 1.0), 7.0, Color("182735"))
 	if _dragging:
 		var knob := _anchor + (_finger - _anchor).limit_length(STICK_RANGE)
 		draw_arc(_anchor, STICK_RANGE * 0.62, 0.0, TAU, 40, Color(1, 1, 1, 0.28), 4.0, true)
@@ -812,6 +908,12 @@ func _draw_ui(w: float, h: float) -> void:
 		var box := Rect2(20.0, h - 72.0, ts.x + 32.0, 52.0)
 		_rr(box, Color(0, 0, 0, 0.55), 14)
 		draw_string(font, box.position + Vector2(16.0, 36.0), prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("ffd36e"))
+	if _photo_message_t > 0.0:
+		var photo_size := font.get_string_size(_photo_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
+		var photo_box := Rect2(camera_c.x - photo_size.x - 72.0, camera_c.y - 24.0, photo_size.x + 24.0, 48.0)
+		_rr(photo_box, Color(0.04, 0.08, 0.12, 0.82), 12)
+		draw_string(font, photo_box.position + Vector2(12.0, 32.0), _photo_message,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.WHITE)
 
 
 func _draw_map(rect: Rect2) -> void:

@@ -123,7 +123,7 @@ func _resume_run() -> void:
 
 func _update_task() -> void:
 	var left := _complaints.size() - _done
-	_task_label.text = "Tap a flag · drag to walk  ·  %d left" % left
+	_task_label.text = "Walk up the driveway · tap flag · camera saves photos  ·  %d left" % left
 
 
 func _on_visit(house: int) -> void:
