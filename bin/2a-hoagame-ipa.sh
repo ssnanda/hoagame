@@ -35,7 +35,7 @@ ALTSTORE_MANIFEST="$ROOT_DIR/altstore.json"
 ALTSTORE_BRANCH="main"
 ALTSTORE_SOURCE_ID="com.ssnanda.hoagame.altstore"
 ALTSTORE_SOURCE_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$ALTSTORE_BRANCH/altstore.json"
-ALTSTORE_ICON_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$ALTSTORE_BRANCH/icon.svg"
+ALTSTORE_ICON_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$ALTSTORE_BRANCH/icon.png"
 ALTSTORE_MIN_IOS="13.0"
 
 GIT_COMMIT="true"
