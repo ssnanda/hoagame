@@ -1,0 +1,86 @@
+[
+  {
+    "id": "flamingo",
+    "who": "Linda, Lot 12",
+    "text": "There is a pink flamingo on the Hendersons' lawn. It is, quote, 'aggressively cheerful'.",
+    "left": {"label": "Ignore it", "effects": {"happiness": 5, "power": -8}},
+    "right": {"label": "Fine $50", "effects": {"budget": 10, "happiness": -10}}
+  },
+  {
+    "id": "mailbox",
+    "who": "Gary, Lot 3",
+    "text": "The Pattersons' mailbox is Eggshell, not Antique Ivory. I have a color chart.",
+    "left": {"label": "Dismiss", "effects": {"happiness": -5, "power": -5}},
+    "right": {"label": "Send violation", "effects": {"power": 10, "happiness": -8}}
+  },
+  {
+    "id": "leafblower",
+    "who": "Anonymous",
+    "text": "Someone ran a leaf blower at 7:59 AM. Quiet hours begin at 8:00. I recorded it.",
+    "left": {"label": "Warn", "effects": {"power": 5, "happiness": -3}},
+    "right": {"label": "Ban leaf blowers", "effects": {"power": 12, "happiness": -15}}
+  },
+  {
+    "id": "pool",
+    "who": "Pool Committee",
+    "text": "The pool needs a $4,000 repair. Or we could 'temporarily' close it until 2031.",
+    "left": {"label": "Close it", "effects": {"budget": 12, "happiness": -18}},
+    "right": {"label": "Repair it", "effects": {"budget": -15, "happiness": 12}}
+  },
+  {
+    "id": "inflatable",
+    "who": "Dave, Lot 27",
+    "text": "My 14-foot inflatable Santa is up. It is October. Santa needs time to acclimate.",
+    "left": {"label": "Allow", "effects": {"happiness": 10, "power": -10}},
+    "right": {"label": "Deflate him", "effects": {"power": 8, "happiness": -12}}
+  },
+  {
+    "id": "trashcans",
+    "who": "Margaret, Lot 8",
+    "text": "Trash cans were visible from the street for 11 hours on Tuesday. ELEVEN.",
+    "left": {"label": "Tell her to relax", "effects": {"happiness": -4, "power": -6}},
+    "right": {"label": "Form a task force", "effects": {"budget": -8, "power": 10}}
+  },
+  {
+    "id": "hedge",
+    "who": "Greg, Lot 19",
+    "text": "The neighbor's hedge is 2 inches over the 6-foot limit. I have a laser level.",
+    "left": {"label": "Measure it yourself", "effects": {"power": 6, "happiness": -4}},
+    "right": {"label": "Hedge amnesty", "effects": {"happiness": 8, "power": -8}}
+  },
+  {
+    "id": "fee",
+    "who": "The Board",
+    "text": "We propose a $75 'Landscape Aesthetic Enhancement Fee'. It enhances nothing.",
+    "left": {"label": "Veto", "effects": {"power": -10, "happiness": 10}},
+    "right": {"label": "Approve", "effects": {"budget": 18, "happiness": -14}}
+  },
+  {
+    "id": "solar",
+    "who": "Priya, Lot 5",
+    "text": "I'd like to install solar panels. They are visible from space, but not from the street.",
+    "left": {"label": "Deny", "effects": {"power": 8, "happiness": -12}},
+    "right": {"label": "Approve", "effects": {"happiness": 10, "power": -6}}
+  },
+  {
+    "id": "meeting",
+    "who": "Secretary",
+    "text": "The annual meeting has 3 attendees. Two are here for the free donuts.",
+    "left": {"label": "Cancel it", "effects": {"power": 10, "happiness": -10}},
+    "right": {"label": "Buy more donuts", "effects": {"budget": -8, "happiness": 10}}
+  },
+  {
+    "id": "gnome",
+    "who": "Beth, Lot 14",
+    "text": "My gnome collection (212) has been called 'a lot'. Is 212 a lot?",
+    "left": {"label": "It is a lot", "effects": {"power": 6, "happiness": -8}},
+    "right": {"label": "Gnome freedom", "effects": {"happiness": 12, "power": -8}}
+  },
+  {
+    "id": "camera",
+    "who": "Security Vendor",
+    "text": "For $6,000 we'll install cameras that mostly point at raccoons.",
+    "left": {"label": "No thanks", "effects": {"happiness": 4, "power": -5}},
+    "right": {"label": "Buy cameras", "effects": {"budget": -14, "power": 14}}
+  }
+]
