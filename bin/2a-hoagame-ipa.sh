@@ -6,13 +6,15 @@ set -euo pipefail
 # Exports a development-signed IPA with Godot (headless) and moves it to
 # ~/Documents/GitHub/ipa/hoagame.ipa.
 #
-# Default run (no flags): bump menu (1-bump-version.sh) → commit → build IPA →
-# push main → refresh the rolling "ios-latest" GitHub release + altstore.json.
-# Opt out with --no-push / --no-publish.
+# Version bumping lives in bin/1-bump-version.sh. This script calls it when the
+# working tree has uncommitted changes (or with --bump/--version/--no-bump).
+# By default it builds and saves the IPA locally without pushing or publishing.
+# Add --push to push the branch, or --publish to push and refresh ios-latest.
 #
 # Common runs:
 #   ./bin/2a-hoagame-ipa.sh
-#   ./bin/2a-hoagame-ipa.sh --no-push
+#   ./bin/2a-hoagame-ipa.sh --bump patch
+#   ./bin/2a-hoagame-ipa.sh --bump patch --publish
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
@@ -37,8 +39,8 @@ ALTSTORE_ICON_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$ALTSTORE_BRAN
 ALTSTORE_MIN_IOS="13.0"
 
 GIT_COMMIT="true"
-GIT_PUSH="true"
-GITHUB_RELEASE="true"
+GIT_PUSH="false"
+GITHUB_RELEASE="false"
 DELETE_ONLY="false"
 
 usage() {
@@ -54,15 +56,15 @@ Options:
   --no-bump             Build the current version, don't bump
   --delete              Delete the local IPA and exit (no build)
   --repo OWNER/REPO     Override GitHub repo (default: ssnanda/hoagame)
-  --no-push             Commit + build only (implies --no-publish)
-  --no-publish          Push, but skip the ios-latest release + altstore.json
+  --push                Push the branch after building
+  --publish             Push + refresh ios-latest and altstore.json
   --no-git-commit       Rewrite version files only, don't commit the bump
   --help
 
 Env:
   GODOT=/path/to/Godot  (default /Applications/Godot.app/Contents/MacOS/Godot)
 
-Default (no flags): bump menu → commit → build IPA → push → publish ios-latest + altstore.json.
+Default: bump only when the tree is dirty, then build and save the IPA locally.
 One-time setup: Godot > Editor > Manage Export Templates > Download.
 USAGE
 }
@@ -233,8 +235,8 @@ while [[ $# -gt 0 ]]; do
     --no-bump) NO_BUMP="true"; shift ;;
     --delete) DELETE_ONLY="true"; shift ;;
     --repo) GITHUB_REPO="${2:-}"; shift 2 ;;
-    --no-push) GIT_PUSH="false"; GITHUB_RELEASE="false"; shift ;;
-    --no-publish) GITHUB_RELEASE="false"; shift ;;
+    --push) GIT_PUSH="true"; shift ;;
+    --publish) GIT_PUSH="true"; GITHUB_RELEASE="true"; shift ;;
     --no-git-commit) GIT_COMMIT="false"; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Error: unknown option $1" >&2; usage; exit 1 ;;
@@ -252,8 +254,11 @@ validate_version "$CURRENT_VERSION"
 RUN_BUMP="false"
 if [[ -n "$VERSION_OVERRIDE" || -n "$BUMP_PART" || "$NO_BUMP" == "true" ]]; then
   RUN_BUMP="true"
-else
+elif working_tree_dirty; then
+  echo "Uncommitted changes detected — running 1-bump-version.sh"
   RUN_BUMP="true"
+else
+  echo "Working tree clean and no --bump/--version — building current version $CURRENT_VERSION"
 fi
 
 if [[ "$RUN_BUMP" == "true" ]]; then
