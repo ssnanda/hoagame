@@ -134,9 +134,10 @@ func _show_update_prompt(description: String) -> void:
 
 
 func _open_altstore_update() -> void:
-	var deep_link := "altstore-classic://viewApp?bundleID=%s" % ALTSTORE_BUNDLE_ID.uri_encode()
-	if OS.shell_open(deep_link) != OK:
-		OS.shell_open("altstore://viewApp?bundleID=%s" % ALTSTORE_BUNDLE_ID.uri_encode())
+	# Use the original scheme first. It is supported by existing AltStore Classic
+	# installations, while iOS may falsely report success for an unhandled newer
+	# altstore-classic:// URL and prevent a useful fallback.
+	OS.shell_open("altstore://viewApp?bundleID=%s" % ALTSTORE_BUNDLE_ID.uri_encode())
 
 
 func _dismiss_update_prompt() -> void:
