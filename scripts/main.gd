@@ -5,6 +5,8 @@ const CARD_SCENE := preload("res://scenes/card.tscn")
 const STREET_SCRIPT := preload("res://scripts/street.gd")
 const LAWN_SCRIPT := preload("res://scripts/lawn_game.gd")
 const CARD_SIZE := Vector2(600, 640)
+const UPDATE_MANIFEST_URL := "https://raw.githubusercontent.com/ssnanda/hoagame/main/altstore.json"
+const ALTSTORE_BUNDLE_ID := "com.ssnanda.hoagame"
 const STAT_LABELS := {"budget": "BUDGET", "happiness": "HAPPY", "power": "POWER"}
 const RESIDENTS := [
 	"The Hendersons", "Gary & Pam", "Dave, Lot 27", "Linda", "Mr. Okafor", "The Pattersons",
@@ -32,6 +34,9 @@ var _done := 0
 var _completed: Array = []
 var _phase := "street"
 var _evening_bonus: Dictionary = {}
+var _update_request: HTTPRequest
+var _update_prompt: Control
+var _available_version := ""
 
 
 func _ready() -> void:
@@ -43,6 +48,101 @@ func _ready() -> void:
 		_resume_run()
 	else:
 		_start()
+	_check_for_updates()
+
+
+func _check_for_updates() -> void:
+	_update_request = HTTPRequest.new()
+	_update_request.timeout = 8.0
+	add_child(_update_request)
+	_update_request.request_completed.connect(_on_update_check_completed)
+	var headers := PackedStringArray(["Cache-Control: no-cache", "Accept: application/json"])
+	var error := _update_request.request(UPDATE_MANIFEST_URL, headers)
+	if error != OK:
+		_update_request.queue_free()
+
+
+func _on_update_check_completed(result: int, response_code: int,
+		headers: PackedStringArray, body: PackedByteArray) -> void:
+	if is_instance_valid(_update_request):
+		_update_request.queue_free()
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		return
+	var source = JSON.parse_string(body.get_string_from_utf8())
+	if not source is Dictionary:
+		return
+	for app in source.get("apps", []):
+		if app is Dictionary and str(app.get("bundleIdentifier", "")) == ALTSTORE_BUNDLE_ID:
+			var remote_version := str(app.get("version", ""))
+			if _is_newer_version(remote_version,
+					str(ProjectSettings.get_setting("application/config/version", "0.0.0"))):
+				_available_version = remote_version
+				_show_update_prompt(str(app.get("versionDescription", "")))
+			return
+
+
+func _is_newer_version(remote: String, local: String) -> bool:
+	var remote_parts := remote.split(".")
+	var local_parts := local.split(".")
+	for i in maxi(remote_parts.size(), local_parts.size()):
+		var remote_part := int(remote_parts[i]) if i < remote_parts.size() else 0
+		var local_part := int(local_parts[i]) if i < local_parts.size() else 0
+		if remote_part != local_part:
+			return remote_part > local_part
+	return false
+
+
+func _show_update_prompt(description: String) -> void:
+	if is_instance_valid(_update_prompt):
+		return
+	_update_prompt = ColorRect.new()
+	(_update_prompt as ColorRect).color = Color(0, 0, 0, 0.76)
+	_update_prompt.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_update_prompt.z_index = 50
+	add_child(_update_prompt)
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _card_style())
+	panel.size = Vector2(600, 490)
+	panel.position = (size - panel.size) / 2.0
+	_update_prompt.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 18)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 32.0
+	box.offset_right = -32.0
+	box.offset_top = 32.0
+	box.offset_bottom = -32.0
+	panel.add_child(box)
+	box.add_child(_make_label("UPDATE AVAILABLE", 38, Color("1c1b1f"), true))
+	box.add_child(_make_label("HOA President %s" % _available_version, 30, Color("2f4858"), true))
+	if not description.is_empty():
+		box.add_child(_make_label(description, 22, Color("4d5660"), true))
+	box.add_child(_make_label("AltStore will open the app page. Keep AltServer running on your computer to install the update.",
+			20, Color("4d5660"), true))
+	var update_button := Button.new()
+	update_button.text = "OPEN ALTSTORE"
+	update_button.custom_minimum_size = Vector2(0, 76)
+	update_button.add_theme_font_size_override("font_size", 28)
+	update_button.pressed.connect(_open_altstore_update)
+	box.add_child(update_button)
+	var later_button := Button.new()
+	later_button.text = "LATER"
+	later_button.custom_minimum_size = Vector2(0, 62)
+	later_button.add_theme_font_size_override("font_size", 24)
+	later_button.pressed.connect(_dismiss_update_prompt)
+	box.add_child(later_button)
+
+
+func _open_altstore_update() -> void:
+	var deep_link := "altstore-classic://viewApp?bundleID=%s" % ALTSTORE_BUNDLE_ID.uri_encode()
+	if OS.shell_open(deep_link) != OK:
+		OS.shell_open("altstore://viewApp?bundleID=%s" % ALTSTORE_BUNDLE_ID.uri_encode())
+
+
+func _dismiss_update_prompt() -> void:
+	if is_instance_valid(_update_prompt):
+		_update_prompt.queue_free()
+	_update_prompt = null
 
 
 func _notification(what: int) -> void:
