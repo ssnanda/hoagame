@@ -1,0 +1,33 @@
+{
+  "name": "HOA President",
+  "identifier": "com.ssnanda.hoagame.altstore",
+  "sourceURL": "https://raw.githubusercontent.com/ssnanda/hoagame/main/altstore.json",
+  "apps": [
+    {
+      "name": "HOA President",
+      "bundleIdentifier": "com.ssnanda.hoagame",
+      "developerName": "ssnanda",
+      "subtitle": "Run your HOA. Survive the meeting.",
+      "localizedDescription": "Swipe on neighborhood complaints and try to stay HOA president.",
+      "iconURL": "https://raw.githubusercontent.com/ssnanda/hoagame/main/icon.png",
+      "tintColor": "2F4858",
+      "screenshotURLs": [],
+      "version": "0.1.11",
+      "versionDate": "2026-10-04",
+      "versionDescription": "Build 0.1.11+12",
+      "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-latest/hoagame.ipa",
+      "size": 23967262,
+      "versions": [
+        {
+          "version": "0.1.11",
+          "date": "2026-10-04",
+          "localizedDescription": "Build 0.1.11+12",
+          "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-latest/hoagame.ipa",
+          "size": 23967262,
+          "minOSVersion": "13.0"
+        }
+      ]
+    }
+  ],
+  "news": []
+}
