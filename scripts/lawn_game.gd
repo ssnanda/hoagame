@@ -1,7 +1,7 @@
 extends Panel
 ## Lawn inspection: line the marker up with the tallest blade, lock the reading, then rule on it.
 
-signal done(effects: Dictionary, points: int, correct: bool)
+signal done(effects: Dictionary, points: int, correct: bool, fined: bool)
 
 const LIMIT_IN := 6.0
 const PPI := 30.0
@@ -168,7 +168,7 @@ func _ready() -> void:
 	box.add_child(_result)
 	_next_btn = _button("CONTINUE")
 	_next_btn.hide()
-	_next_btn.pressed.connect(func(): done.emit(_pending[0], _pending[1], _pending[2]))
+	_next_btn.pressed.connect(func(): done.emit(_pending[0], _pending[1], _pending[2], _pending[3]))
 	box.add_child(_next_btn)
 
 
@@ -213,7 +213,7 @@ func _rule(fine: bool) -> void:
 	_result.text = "%s\n%s" % [text, _fx_text(fx)]
 	_result.show()
 	_next_btn.show()
-	_pending = [fx, pts, correct]
+	_pending = [fx, pts, correct, fine]
 
 
 func _fx_text(fx: Dictionary) -> String:

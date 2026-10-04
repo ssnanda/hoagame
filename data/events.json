@@ -1,0 +1,105 @@
+[
+  {
+    "id": "arch_solar", "category": "architectural",
+    "who": "{owner} · {address}",
+    "text": "Architectural request: roof solar panels, visible from the street. Bylaws are silent. The neighbors are not.",
+    "left": {"label": "Deny", "effects": {"happiness": -6, "power": 4, "legal": 8}},
+    "right": {"label": "Approve", "effects": {"happiness": 6, "power": -3}}
+  },
+  {
+    "id": "arch_fence", "category": "architectural",
+    "who": "{owner} · {address}",
+    "text": "Architectural request: a 6-foot fence. The rules say 4. They have a very large dog.",
+    "left": {"label": "Deny", "effects": {"happiness": -5, "power": 5, "legal": 5}},
+    "right": {"label": "Approve variance", "effects": {"happiness": 5, "power": -6, "board": -2}}
+  },
+  {
+    "id": "arch_paint", "category": "architectural",
+    "who": "{owner} · {address}",
+    "text": "Architectural request: repaint the house 'Sunrise Coral'. It is not on the approved palette. It is very coral.",
+    "left": {"label": "Deny", "effects": {"happiness": -4, "power": 5}},
+    "right": {"label": "Approve", "effects": {"happiness": 4, "power": -4, "legal": 3}}
+  },
+  {
+    "id": "arch_shed", "category": "architectural",
+    "who": "{owner} · {address}",
+    "text": "Architectural request: a backyard shed, 10x12. Plans attached. Drawn on a napkin.",
+    "left": {"label": "Deny", "effects": {"happiness": -4, "power": 4}},
+    "right": {"label": "Approve", "effects": {"happiness": 4, "power": -2, "budget": 3}}
+  },
+  {
+    "id": "assess_roof", "category": "assessment",
+    "who": "Treasurer",
+    "text": "The clubhouse roof reserve is short. A special assessment of $300 per home would cover it. People will notice.",
+    "left": {"label": "Skip it", "effects": {"budget": -12, "happiness": 4, "board": -3}},
+    "right": {"label": "Assess homes", "effects": {"budget": 18, "happiness": -14, "legal": 4}}
+  },
+  {
+    "id": "assess_drain", "category": "assessment",
+    "who": "Treasurer",
+    "text": "Storm drains along HOA Way are clogged. A small assessment fixes it before the next rain. Or hope.",
+    "left": {"label": "Hope", "effects": {"budget": 4, "happiness": -8, "power": -4}},
+    "right": {"label": "Assess $120", "effects": {"budget": 10, "happiness": -6, "power": 3}}
+  },
+  {
+    "id": "vendor_landscape", "category": "vendor",
+    "who": "Landscaping bids",
+    "text": "Two bids to mow the commons. Budget Greens is cheap, 'mostly reliable'. Evergreen Pro costs more and shows up.",
+    "left": {"label": "Budget Greens", "effects": {"budget": 6, "happiness": -4},
+      "project": {"id": "budget_greens", "name": "Budget Greens contract", "days": 4, "daily": {"happiness": -1}, "finish": {"budget": 4}}},
+    "right": {"label": "Evergreen Pro", "effects": {"budget": -10, "happiness": 5},
+      "project": {"id": "evergreen", "name": "Evergreen Pro contract", "days": 4, "daily": {"happiness": 1}, "finish": {"power": 3}}}
+  },
+  {
+    "id": "vendor_paving", "category": "vendor",
+    "who": "Paving bids",
+    "text": "The road needs patching. One vendor is the board president's cousin. His quote is suspiciously round.",
+    "left": {"label": "Cousin's quote", "effects": {"budget": 4, "power": 3, "legal": 10, "board": 3}},
+    "right": {"label": "Open bidding", "effects": {"budget": -10, "power": 2, "happiness": 4}}
+  },
+  {
+    "id": "vendor_pool", "category": "vendor",
+    "who": "Pool service",
+    "text": "Pool service wants a 12-month contract. The current guy has been 'sort of' skimming since June.",
+    "left": {"label": "Keep current guy", "effects": {"budget": 4, "happiness": -6}},
+    "right": {"label": "Sign contract", "effects": {"budget": -8, "happiness": 8}}
+  },
+  {
+    "id": "project_playground", "category": "project",
+    "who": "Parents' committee",
+    "text": "Proposal: a new playground by the lake. Three days of work, daily cost, big payoff.",
+    "left": {"label": "Not now", "effects": {"happiness": -6}},
+    "right": {"label": "Build it", "effects": {"budget": -6, "happiness": 2},
+      "project": {"id": "playground", "name": "Playground build", "days": 3, "daily": {"budget": -4}, "finish": {"happiness": 16, "power": 4}}}
+  },
+  {
+    "id": "project_garden", "category": "project",
+    "who": "Garden club",
+    "text": "Proposal: a community garden on the corner lot. It will take a few days and a lot of mulch.",
+    "left": {"label": "Decline", "effects": {"happiness": -4, "power": 2}},
+    "right": {"label": "Approve", "effects": {"budget": -4},
+      "project": {"id": "garden", "name": "Community garden", "days": 3, "daily": {"budget": -2}, "finish": {"happiness": 12, "budget": 4}}}
+  },
+  {
+    "id": "project_clubhouse", "category": "project",
+    "who": "Social committee",
+    "text": "Proposal: renovate the clubhouse. Four days, noisy, expensive, and then it is nicer.",
+    "left": {"label": "Defer", "effects": {"happiness": -5, "board": -2}},
+    "right": {"label": "Renovate", "effects": {"budget": -8},
+      "project": {"id": "clubhouse", "name": "Clubhouse renovation", "days": 4, "daily": {"budget": -5, "happiness": -1}, "finish": {"happiness": 18, "power": 6}}}
+  },
+  {
+    "id": "politics_leniency", "category": "politics",
+    "who": "Board member",
+    "text": "A board member quietly asks you to 'be understanding' about a neighbor. Nothing in writing, naturally.",
+    "left": {"label": "Refuse", "effects": {"power": 4, "board": -6}},
+    "right": {"label": "Understand", "effects": {"power": -3, "board": 6, "legal": 10}}
+  },
+  {
+    "id": "politics_petition", "category": "politics",
+    "who": "Resident petition",
+    "text": "A petition with 41 signatures asks the board to review your enforcement. Several signatures are from one household.",
+    "left": {"label": "Ignore", "effects": {"power": -4, "board": -4, "happiness": -3}},
+    "right": {"label": "Hold forum", "effects": {"budget": -3, "happiness": 6, "board": 3}}
+  }
+]

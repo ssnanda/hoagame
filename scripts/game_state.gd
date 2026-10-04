@@ -147,6 +147,35 @@ func next_day() -> void:
 	stats_changed.emit()
 
 
+## Ends the run from outside the stat rules (e.g. a lost election).
+func force_end(reason: String) -> void:
+	_save_best()
+	clear_run()
+	game_over.emit(reason)
+
+
+## 0 spring, 1 summer, 2 fall, 3 winter; two weeks each.
+func season() -> int:
+	return ((day - 1) / 14) % 4
+
+
+func season_name() -> String:
+	return ["SPRING", "SUMMER", "FALL", "WINTER"][season()]
+
+
+## 0 = Monday … 6 = Sunday.
+func weekday() -> int:
+	return (day - 1) % 7
+
+
+func weekday_name() -> String:
+	return ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][weekday()]
+
+
+func is_weekend() -> bool:
+	return weekday() >= 5
+
+
 func _save_best() -> void:
 	if score <= best:
 		return
