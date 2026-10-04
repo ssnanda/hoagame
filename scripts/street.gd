@@ -68,6 +68,7 @@ var _grass: Array = []
 var _day_total := 1
 var _day_done := 0
 var _houses: Array = []
+var _house_positions: Array[Vector2] = []
 var _tufts: Array = []
 var _trees: Array = []
 var _cars: Array = []
@@ -96,6 +97,7 @@ func _ready() -> void:
 		_houses.append({"roof": ROOFS[i % ROOFS.size()], "kind": i % 5,
 				"brick": i % 4 == 0, "solar": i % 5 == 3, "fence": i % 3 == 2})
 		_grass.append(3.0)
+	_build_house_positions()
 	for j in TUFTS:
 		_tufts.append({"x": rng.randf(), "y": rng.randf(), "h": rng.randf_range(0.6, 1.0), "a": rng.randf_range(-0.3, 0.3)})
 	for side in [-1, 1]:
@@ -130,20 +132,31 @@ func _ready() -> void:
 
 
 func house_y(i: int) -> float:
-	if i >= MAIN_HOUSE_COUNT:
-		var junction_y := float(JUNCTIONS[int((i - MAIN_HOUSE_COUNT) / 4)])
-		var offset := ROAD_HALF + WALK_W + YARD_GAP + HOUSE_D * 0.5
-		return junction_y + (-offset if i % 2 == 0 else offset)
-	var candidate := WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
-	# Keep main-avenue lots clear of every intersecting and winding road. Alternate
-	# the search direction so denser homes do not bunch on one side of a crossing.
-	var direction := -1.0 if i % 4 < 2 else 1.0
-	for attempt in 20:
-		var house_x := _road_x(candidate) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5)
-		if _public_road_distance(Vector2(house_x, candidate), false) >= 178.0:
-			break
-		candidate = clampf(candidate + direction * 24.0, 180.0, WORLD_H - 180.0)
-	return candidate
+	return _house_positions[i].y
+
+
+func _build_house_positions() -> void:
+	_house_positions.clear()
+	for i in HOUSE_COUNT:
+		if i >= MAIN_HOUSE_COUNT:
+			var cross_index := i - MAIN_HOUSE_COUNT
+			var junction_y := float(JUNCTIONS[int(cross_index / 4)])
+			var offset := ROAD_HALF + WALK_W + YARD_GAP + HOUSE_D * 0.5
+			var y := junction_y + (-offset if cross_index % 2 == 0 else offset)
+			var cross_xs := [120.0, 600.0, 1200.0, 1680.0]
+			_house_positions.append(Vector2(cross_xs[cross_index % 4], y))
+			continue
+		var candidate := WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
+		# Keep main-avenue lots clear of intersecting and winding roads. This
+		# search runs once during setup; drawing uses the cached result.
+		var direction := -1.0 if i % 4 < 2 else 1.0
+		for attempt in 20:
+			var house_x := _road_x(candidate) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5)
+			if _public_road_distance(Vector2(house_x, candidate), false) >= 178.0:
+				break
+			candidate = clampf(candidate + direction * 24.0, 180.0, WORLD_H - 180.0)
+		var x := _road_x(candidate) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5)
+		_house_positions.append(Vector2(x, candidate))
 
 
 func _side(i: int) -> int:
@@ -153,11 +166,7 @@ func _side(i: int) -> int:
 
 
 func _house_c(i: int) -> Vector2:
-	if i >= MAIN_HOUSE_COUNT:
-		var cross_index := i - MAIN_HOUSE_COUNT
-		var cross_xs := [120.0, 600.0, 1200.0, 1680.0]
-		return Vector2(cross_xs[cross_index % 4], house_y(i))
-	return Vector2(_road_x(house_y(i)) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5), house_y(i))
+	return _house_positions[i]
 
 
 func _road_x(wy: float) -> float:

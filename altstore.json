@@ -13,6 +13,7 @@
       "tintColor": "2F4858",
       "screenshotURLs": [],
       "version": "0.1.18",
+      "buildVersion": "19",
       "versionDate": "2026-10-04",
       "versionDescription": "Build 0.1.18+19",
       "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-latest/hoagame.ipa",
@@ -20,6 +21,7 @@
       "versions": [
         {
           "version": "0.1.18",
+          "buildVersion": "19",
           "date": "2026-10-04",
           "localizedDescription": "Build 0.1.18+19",
           "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-latest/hoagame.ipa",

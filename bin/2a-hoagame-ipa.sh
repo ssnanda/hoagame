@@ -145,8 +145,9 @@ build_ipa() {
 # Regenerate altstore.json for the just-built IPA and commit it.
 write_altstore_manifest() {
   cd "$ROOT_DIR"
-  local size date dl short
+  local size date dl short build
   short="${VERSION%+*}"
+  build="${VERSION#*+}"
   size="$(stat -f%z "$IPA_FINAL_PATH")"
   date="$(date +%Y-%m-%d)"
   dl="https://github.com/$GITHUB_REPO/releases/download/$RELEASE_TAG/$(basename "$IPA_FINAL_PATH")"
@@ -167,6 +168,7 @@ write_altstore_manifest() {
       "tintColor": "2F4858",
       "screenshotURLs": [],
       "version": "$short",
+      "buildVersion": "$build",
       "versionDate": "$date",
       "versionDescription": "Build $VERSION",
       "downloadURL": "$dl",
@@ -174,6 +176,7 @@ write_altstore_manifest() {
       "versions": [
         {
           "version": "$short",
+          "buildVersion": "$build",
           "date": "$date",
           "localizedDescription": "Build $VERSION",
           "downloadURL": "$dl",
