@@ -4,7 +4,7 @@ extends Control
 
 signal visit(house: int)
 
-const HOUSE_COUNT := 80
+const HOUSE_COUNT := 112
 const MAIN_HOUSE_COUNT := 48
 const HOUSE_SPACING := 210.0
 const HOUSE_MARGIN := 520.0
@@ -16,7 +16,7 @@ const HOUSE_W := 126.0
 const HOUSE_D := 144.0
 const YARD_GAP := 80.0
 const WALK_SPEED := 380.0
-const STICK_RANGE := 110.0
+const STICK_RANGE := 86.0
 const DEADZONE := 0.12
 const NEAR_DIST := 150.0
 const DRIVEWAY_HALF := 30.0
@@ -33,6 +33,7 @@ const JUNCTIONS := [WORLD_H * 0.08, WORLD_H * 0.2, WORLD_H * 0.32, WORLD_H * 0.4
 const CONNECTOR_XS := [300.0, WORLD_W - 300.0]
 const CURVED_LANE_COUNT := 6
 const CULDESAC_X := 92.0
+const MINI_MAP_SIZE := Vector2(148.0, 204.0)
 const LAKE_Y := WORLD_H * 0.53
 const MOUNTAIN_Y := 260.0
 const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a"), Color("805b73"), Color("b77945")]
@@ -89,6 +90,8 @@ var _camera_flash := 0.0
 var _photo_message := ""
 var _photo_message_t := 0.0
 var _map_open := false
+var _camera_mode := false
+var _evidence: Dictionary = {}
 
 
 func _ready() -> void:
@@ -143,13 +146,13 @@ func _build_house_positions() -> void:
 	for i in HOUSE_COUNT:
 		if i >= MAIN_HOUSE_COUNT:
 			var cross_index := i - MAIN_HOUSE_COUNT
-			var junction_y := float(JUNCTIONS[int(cross_index / 4)])
+			var junction_y := float(JUNCTIONS[int(cross_index / 8)])
 			var offset := ROAD_HALF + WALK_W + YARD_GAP + HOUSE_D * 0.5
 			var y := junction_y + (-offset if cross_index % 2 == 0 else offset)
 			# Keep the outer lots beyond the connector sidewalks while retaining a
 			# short approach from each cross-street cul-de-sac.
-			var cross_xs := [70.0, 550.0, 1250.0, 1730.0]
-			_house_positions.append(Vector2(cross_xs[cross_index % 4], y))
+			var cross_xs := [70.0, 70.0, 550.0, 700.0, 1100.0, 1250.0, 1730.0, 1730.0]
+			_house_positions.append(Vector2(cross_xs[cross_index % 8], y))
 			continue
 		var candidate := WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
 		# Keep main-avenue lots clear of intersecting and winding roads. This
@@ -174,14 +177,24 @@ func _house_c(i: int) -> Vector2:
 	return _house_positions[i]
 
 
+func _house_rotation(i: int) -> float:
+	return PI * 0.5 if i >= MAIN_HOUSE_COUNT else 0.0
+
+
+func _address(i: int) -> String:
+	return "%d %s" % [101 + i * 2, "COURT" if i >= MAIN_HOUSE_COUNT else "HOA WAY"]
+
+
 func _road_x(wy: float) -> float:
 	return WORLD_W * 0.5 + sin(wy / 430.0) * 70.0 + sin(wy / 170.0) * 20.0
 
 
 ## pins: house index -> "lawn" | "card". grass: tall-grass height in inches per house.
-func set_day(pins: Dictionary, grass: Array, completed := 0, saved_position = null) -> void:
+func set_day(pins: Dictionary, grass: Array, completed := 0, saved_position = null,
+		evidence: Dictionary = {}) -> void:
 	_pins = pins.duplicate()
 	_grass = grass.duplicate()
+	_evidence = evidence.duplicate(true)
 	_day_total = maxi(pins.size(), 1)
 	_day_done = int(completed)
 	_walker_variant = (GameState.day - 1) % 4
@@ -202,8 +215,14 @@ func get_player_position() -> Vector2:
 	return Vector2(_player_x, _player_y)
 
 
+func get_evidence() -> Dictionary:
+	return _evidence.duplicate(true)
+
+
 func mark_done(house: int) -> void:
 	_pins[house] = "done"
+	_bubble = "INSPECTION COMPLETE · %s" % _address(house)
+	_bubble_t = 2.8
 	_day_done += 1
 	_update_dusk()
 
@@ -260,9 +279,18 @@ func _tap_flag(pos: Vector2) -> bool:
 		queue_redraw()
 		return true
 	if pos.distance_to(Vector2(size.x - 66.0, size.y - 72.0)) <= 48.0:
-		_take_photo.call_deferred()
+		if _camera_mode:
+			_take_photo()
+			_camera_mode = false
+		elif _near >= 0 and _pins.get(_near, "") in ["lawn", "card"]:
+			_camera_mode = true
+			_photo_message = "FRAME THE VIOLATION"
+			_photo_message_t = 2.0
+		else:
+			_photo_message = "MOVE CLOSER TO INSPECT"
+			_photo_message_t = 2.0
 		return true
-	if pos.x >= size.x - 206.0 and pos.y <= 296.0:
+	if pos.x >= size.x - MINI_MAP_SIZE.x - 16.0 and pos.y <= MINI_MAP_SIZE.y + 16.0:
 		_map_open = true
 		queue_redraw()
 		return true
@@ -273,7 +301,7 @@ func _tap_flag(pos: Vector2) -> bool:
 			continue
 		var pin := _house_c(i) - Vector2(_cam_x, _cam) + Vector2(0, -18.0)
 		var house_rect := Rect2(pin - Vector2(HOUSE_W * 0.6, HOUSE_D * 0.6), Vector2(HOUSE_W * 1.2, HOUSE_D * 1.2))
-		if pos.distance_to(pin) <= 72.0 or house_rect.has_point(pos):
+		if i == _near and (pos.distance_to(pin) <= 72.0 or house_rect.has_point(pos)):
 			visit.emit(i)
 			return true
 	return false
@@ -283,7 +311,7 @@ func _process(delta: float) -> void:
 	_time += delta
 	_bubble_t = maxf(0.0, _bubble_t - delta)
 	var move := _stick
-	if _map_open:
+	if _map_open or _camera_mode:
 		move = Vector2.ZERO
 	elif not _dragging:
 		move = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
@@ -333,7 +361,7 @@ func _driveway_at(point: Vector2) -> int:
 func _driveway_segment(i: int) -> PackedVector2Array:
 	var home := _house_c(i)
 	if i >= MAIN_HOUSE_COUNT:
-		var junction := float(JUNCTIONS[int((i - MAIN_HOUSE_COUNT) / 4)])
+		var junction := float(JUNCTIONS[int((i - MAIN_HOUSE_COUNT) / 8)])
 		return PackedVector2Array([Vector2(home.x, junction + _side(i) * (ROAD_HALF + WALK_W)),
 				Vector2(home.x, home.y - _side(i) * HOUSE_D * 0.46)])
 	return PackedVector2Array([Vector2(_road_x(home.y) + _side(i) * (ROAD_HALF + WALK_W), home.y),
@@ -426,9 +454,13 @@ func _screen_to_world_draw(point: Vector2) -> Vector2:
 
 func _take_photo() -> void:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
-	var path := "user://hoa-photo-%s.png" % stamp
+	var lot := _near if _near >= 0 else 0
+	var path := "user://evidence-lot-%03d-%s.png" % [101 + lot * 2, stamp]
 	var error := get_viewport().get_texture().get_image().save_png(path)
-	_photo_message = "PHOTO SAVED" if error == OK else "CAMERA ERROR"
+	if error == OK and _near >= 0:
+		_evidence[_near] = {"path": path, "time": stamp, "address": _address(_near),
+				"category": str(_pins.get(_near, "inspection"))}
+	_photo_message = "EVIDENCE SAVED · %s" % _address(lot) if error == OK else "CAMERA ERROR"
 	_photo_message_t = 2.2
 	_camera_flash = 1.0 if error == OK else 0.0
 	queue_redraw()
@@ -494,7 +526,7 @@ func _draw() -> void:
 	for i in HOUSE_COUNT:
 		if _on_screen(house_y(i), 320.0):
 			var focus_scale := 1.20 if i == _near else 1.0
-			_set_world_transform(_house_c(i) - Vector2(_cam_x, _cam), focus_scale)
+			_set_world_transform(_house_c(i) - Vector2(_cam_x, _cam), focus_scale, _house_rotation(i))
 			_draw_house(i, sh / focus_scale)
 			_set_world_transform()
 	for t in _trees:
@@ -518,19 +550,22 @@ func _draw() -> void:
 		draw_rect(Rect2(0, 0, w, h), Color(0.25, 0.27, 0.32, 0.4 * _gloom))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_ui(w, h)
+	if _camera_mode:
+		_draw_camera_frame(w, h)
 	if _map_open:
 		_draw_full_map(w, h)
 	if _camera_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, _camera_flash * 0.72))
 
 
-func _set_world_transform(focus := Vector2.ZERO, focus_scale := 1.0) -> void:
+func _set_world_transform(focus := Vector2.ZERO, focus_scale := 1.0, rotation := 0.0) -> void:
 	var base_scale := Vector2(_world_scale, _world_scale * WORLD_TILT)
 	var center := Vector2(size.x * 0.5, size.y * 0.54)
-	var origin := center * (Vector2.ONE - base_scale)
-	if focus_scale != 1.0:
-		origin += base_scale * focus * (1.0 - focus_scale)
-	draw_set_transform(origin, 0.0, base_scale * focus_scale)
+	var base_origin := center * (Vector2.ONE - base_scale)
+	var scaled_focus := base_scale * focus_scale * focus
+	var rotated_focus := scaled_focus.rotated(rotation)
+	var origin := base_origin + base_scale * focus - rotated_focus
+	draw_set_transform(origin, rotation, base_scale * focus_scale)
 
 
 func _draw_ground(w: float, h: float, cx: float) -> void:
@@ -783,6 +818,40 @@ func _draw_yard(i: int) -> void:
 	# from the sidewalk edge to the entrance—not a stripe painted across the road.
 	draw_line(drive_start, drive_end, Color("b8b3a8").lerp(Color("686477"), _dusk * 0.5), DRIVEWAY_HALF * 1.55, true)
 	draw_line(drive_start, drive_end, Color(1, 1, 1, 0.16), 3.0, true)
+	_draw_lot_details(i, r, drive_start, drive_end)
+
+
+func _draw_lot_details(i: int, yard: Rect2, curb: Vector2, entrance: Vector2) -> void:
+	# A curb mailbox and foundation beds make the lot direction readable even
+	# before the house is close enough to focus.
+	var drive_dir := (entrance - curb).normalized()
+	var normal := Vector2(-drive_dir.y, drive_dir.x)
+	var mailbox := curb + normal * 24.0
+	draw_line(mailbox, mailbox + Vector2(0, -18), Color("5b4634"), 4.0, true)
+	_rr(Rect2(mailbox + Vector2(-8, -27), Vector2(16, 11)), Color("344b59"), 3)
+	for shrub_i in 3:
+		var t := (float(shrub_i) + 1.0) / 4.0
+		var shrub := entrance.lerp(curb, t) - normal * 28.0
+		_ellipse(shrub, 8.0 + shrub_i * 1.5, 6.0, Color("257149").lightened(i % 3 * 0.05))
+	var kind := str(_pins.get(i, ""))
+	if kind == "lawn":
+		for weed_i in 7:
+			var wx := yard.position.x + 12.0 + fposmod(float(i * 31 + weed_i * 23), maxf(20.0, yard.size.x - 24.0))
+			var wy := yard.position.y + 18.0 + fposmod(float(i * 19 + weed_i * 37), maxf(24.0, yard.size.y - 36.0))
+			draw_line(Vector2(wx, wy), Vector2(wx + (weed_i % 3 - 1) * 4.0, wy - 18.0), Color("d4c54c"), 3.0, true)
+	elif kind == "card":
+		# Visible curb bins give non-lawn complaints a concrete photograph target.
+		for bin_i in 2:
+			var bin_c := curb - drive_dir * 14.0 + normal * (-25.0 + bin_i * 22.0)
+			_rr(Rect2(bin_c - Vector2(8, 12), Vector2(16, 24)),
+					Color("315b74") if bin_i == 0 else Color("3f7654"), 3)
+			draw_line(bin_c + Vector2(-7, -8), bin_c + Vector2(7, -8), Color("1d2d35"), 3.0)
+	if i % 13 == 0:
+		var patio := yard.position + yard.size * Vector2(0.72, 0.72)
+		_ellipse(patio, 18.0, 12.0, Color("4aa9c7", 0.8))
+	elif i % 9 == 0:
+		var shed := yard.position + yard.size * Vector2(0.72, 0.25)
+		_rr(Rect2(shed - Vector2(13, 11), Vector2(26, 22)), Color("9a6d45"), 3)
 
 
 func _draw_house(i: int, sh: Vector2) -> void:
@@ -943,7 +1012,7 @@ func _chevron(c: Vector2, up: bool, alpha: float) -> void:
 
 func _draw_ui(w: float, h: float) -> void:
 	var font := ThemeDB.fallback_font
-	_draw_map(Rect2(w - 206.0, 16.0, 190.0, 280.0))
+	_draw_map(Rect2(w - MINI_MAP_SIZE.x - 16.0, 16.0, MINI_MAP_SIZE.x, MINI_MAP_SIZE.y))
 	var camera_c := Vector2(w - 66.0, h - 72.0)
 	draw_circle(camera_c + Vector2(3.0, 5.0), 42.0, Color(0, 0, 0, 0.25))
 	draw_circle(camera_c, 42.0, Color("f4ecd8"))
@@ -953,7 +1022,7 @@ func _draw_ui(w: float, h: float) -> void:
 	draw_circle(camera_c + Vector2(0.0, 1.0), 7.0, Color("182735"))
 	if _dragging:
 		var knob := _anchor + (_finger - _anchor).limit_length(STICK_RANGE)
-		draw_arc(_anchor, STICK_RANGE * 0.62, 0.0, TAU, 40, Color(1, 1, 1, 0.28), 4.0, true)
+		draw_arc(_anchor, STICK_RANGE * 0.62, 0.0, TAU, 40, Color(1, 1, 1, 0.18), 3.0, true)
 		_chevron(_anchor + Vector2(0, -STICK_RANGE * 0.62 - 22.0), true, 0.5)
 		_chevron(_anchor + Vector2(0, STICK_RANGE * 0.62 + 22.0), false, 0.5)
 		draw_polyline(PackedVector2Array([_anchor + Vector2(-STICK_RANGE * 0.62 - 22.0, -16.0),
@@ -972,7 +1041,8 @@ func _draw_ui(w: float, h: float) -> void:
 	var prompt := ""
 	if _near >= 0:
 		var kind: String = _pins.get(_near, "")
-		prompt = "TAP FLAG TO INSPECT" if kind == "lawn" or kind == "card" else "CASE CLOSED"
+		prompt = "%s · %s" % [_address(_near),
+				("READY TO INSPECT" if kind == "lawn" or kind == "card" else "PROPERTY INSPECTED")]
 	if prompt != "":
 		var ts := font.get_string_size(prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, 26)
 		var box := Rect2(20.0, h - 72.0, ts.x + 32.0, 52.0)
@@ -984,6 +1054,22 @@ func _draw_ui(w: float, h: float) -> void:
 		_rr(photo_box, Color(0.04, 0.08, 0.12, 0.82), 12)
 		draw_string(font, photo_box.position + Vector2(12.0, 32.0), _photo_message,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.WHITE)
+
+
+func _draw_camera_frame(w: float, h: float) -> void:
+	draw_rect(Rect2(0, 0, w, h), Color(0, 0, 0, 0.18))
+	var frame := Rect2(w * 0.12, h * 0.2, w * 0.76, h * 0.56)
+	var bracket := Color("ffd36e")
+	var length := 48.0
+	for corner in [frame.position, Vector2(frame.end.x, frame.position.y),
+			Vector2(frame.position.x, frame.end.y), frame.end]:
+		var sx := 1.0 if corner.x == frame.position.x else -1.0
+		var sy := 1.0 if corner.y == frame.position.y else -1.0
+		draw_line(corner, corner + Vector2(sx * length, 0), bracket, 5.0, true)
+		draw_line(corner, corner + Vector2(0, sy * length), bracket, 5.0, true)
+	var title := _address(_near) if _near >= 0 else "EVIDENCE"
+	draw_string(ThemeDB.fallback_font, Vector2(0, frame.position.y - 28.0), title,
+			HORIZONTAL_ALIGNMENT_CENTER, w, 24, Color.WHITE)
 
 
 func _draw_map(rect: Rect2) -> void:
@@ -1062,8 +1148,13 @@ func _draw_full_map(w: float, h: float) -> void:
 		var hp := _map_point(_house_c(i), map_rect)
 		var roof: Color = _houses[i].roof
 		draw_rect(Rect2(hp - Vector2(5.0, 4.0), Vector2(10.0, 8.0)), roof)
-		if _pins.get(i, "") in ["lawn", "card"]:
+		var map_kind := str(_pins.get(i, ""))
+		if map_kind in ["lawn", "card"]:
 			draw_circle(hp, 8.0, Color("ffd36e", 0.45), false, 2.0)
+		elif map_kind == "done":
+			draw_circle(hp, 7.0, Color("50c878"), false, 2.0)
+		if _evidence.has(i):
+			draw_circle(hp, 3.0, Color("71b9dc"))
 	var player := _map_point(Vector2(_player_x, _player_y), map_rect)
 	draw_circle(player, 9.0, Color("ffd36e"))
 	draw_circle(player, 14.0, Color("1d3340"), false, 3.0)

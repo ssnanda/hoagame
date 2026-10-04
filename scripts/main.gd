@@ -34,6 +34,7 @@ var _done := 0
 var _completed: Array = []
 var _phase := "street"
 var _evening_bonus: Dictionary = {}
+var _evidence: Dictionary = {}
 var _update_request: HTTPRequest
 var _update_prompt: Control
 var _available_version := ""
@@ -178,6 +179,7 @@ func _new_day() -> void:
 	_completed = []
 	_phase = "street"
 	_evening_bonus = {}
+	_evidence = {}
 	for i in STREET_SCRIPT.HOUSE_COUNT:
 		_grass.append(randf_range(2.5, 4.5))
 	var pins := {}
@@ -211,6 +213,7 @@ func _resume_run() -> void:
 	_done = _completed.size()
 	_phase = str(world.get("phase", "street"))
 	_evening_bonus = world.get("evening_bonus", {}).duplicate(true)
+	_evidence = world.get("evidence", {}).duplicate(true)
 	var pins := {}
 	for house in _complaints:
 		var h := int(house)
@@ -218,7 +221,7 @@ func _resume_run() -> void:
 	var saved_position = world.get("player_position", Vector2(-1.0, float(world.get("player_y", -1.0))))
 	if int(world.get("world_version", 1)) < 2:
 		saved_position = Vector2(-1.0, saved_position.y)
-	_street.set_day(pins, _grass, _done, saved_position)
+	_street.set_day(pins, _grass, _done, saved_position, _evidence)
 	_update_task()
 	_refresh()
 	_float("WELCOME BACK", Color("ffd36e"))
@@ -228,7 +231,7 @@ func _resume_run() -> void:
 
 func _update_task() -> void:
 	var left := _complaints.size() - _done
-	_task_label.text = "Walk up the driveway · tap flag · camera saves photos  ·  %d left" % left
+	_task_label.text = "%d inspections remaining" % left
 
 
 func _on_visit(house: int) -> void:
@@ -334,12 +337,13 @@ func _save_progress(show_feedback := false) -> void:
 	if not is_instance_valid(_street) or _complaints.is_empty() or _is_over:
 		return
 	GameState.save_run({
-		"world_version": 3,
+		"world_version": 4,
 		"complaints": _complaints.duplicate(true),
 		"grass": _grass.duplicate(),
 		"completed": _completed.duplicate(),
 		"phase": _phase,
 		"evening_bonus": _evening_bonus.duplicate(true),
+		"evidence": _street.get_evidence(),
 		"player_position": _street.get_player_position(),
 	})
 	if show_feedback and is_instance_valid(_save_label):
