@@ -102,6 +102,10 @@ func _resume_run() -> void:
 		return
 	_complaints = world.get("complaints", {}).duplicate(true)
 	_grass = world.get("grass", []).duplicate(true)
+	# Older runs had fewer lots. Fill only the new lots so existing lawn values and
+	# completed cases remain intact when the denser neighborhood is introduced.
+	while _grass.size() < STREET_SCRIPT.HOUSE_COUNT:
+		_grass.append(randf_range(2.5, 4.5))
 	_completed = world.get("completed", []).duplicate()
 	_done = _completed.size()
 	_phase = str(world.get("phase", "street"))
@@ -134,7 +138,7 @@ func _on_visit(house: int) -> void:
 	_overlay.show()
 	if comp.kind == "lawn":
 		var game = LAWN_SCRIPT.new()
-		game.setup(_grass[house], RESIDENTS[house])
+		game.setup(_grass[house], _resident_name(house))
 		game.done.connect(_on_lawn_done)
 		_overlay.add_child(game)
 		game.position = ((size - Vector2(620, 880)) / 2.0).max(Vector2(20, 20))
@@ -144,6 +148,13 @@ func _on_visit(house: int) -> void:
 		_overlay.add_child(_card)
 		_card.setup(comp.card, (size - CARD_SIZE) / 2.0)
 		_card.swiped.connect(_on_swiped)
+
+
+func _resident_name(house: int) -> String:
+	if house < RESIDENTS.size():
+		return RESIDENTS[house]
+	return ["The Parkers", "The Robinsons", "The Patels", "The Wilsons",
+			"The Nguyens", "The Millers"][house % 6]
 
 
 func _on_lawn_done(effects: Dictionary, points: int, correct: bool) -> void:
@@ -222,7 +233,7 @@ func _save_progress(show_feedback := false) -> void:
 	if not is_instance_valid(_street) or _complaints.is_empty() or _is_over:
 		return
 	GameState.save_run({
-		"world_version": 2,
+		"world_version": 3,
 		"complaints": _complaints.duplicate(true),
 		"grass": _grass.duplicate(),
 		"completed": _completed.duplicate(),
