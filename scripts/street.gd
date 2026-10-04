@@ -4,8 +4,8 @@ extends Control
 
 signal visit(house: int)
 
-const HOUSE_COUNT := 40
-const MAIN_HOUSE_COUNT := 24
+const HOUSE_COUNT := 80
+const MAIN_HOUSE_COUNT := 48
 const HOUSE_SPACING := 210.0
 const HOUSE_MARGIN := 520.0
 const WORLD_H := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (MAIN_HOUSE_COUNT - 1)
@@ -28,8 +28,11 @@ const WALKER_K := 1.4
 const SIDEWALK_CENTER := ROAD_HALF + WALK_W * 0.5
 const CAR_CLEAR_X := 42.0
 const CAR_CLEAR_Y := 58.0
-const JUNCTIONS := [WORLD_H * 0.2, WORLD_H * 0.4, WORLD_H * 0.61, WORLD_H * 0.81]
+const JUNCTIONS := [WORLD_H * 0.08, WORLD_H * 0.2, WORLD_H * 0.32, WORLD_H * 0.44,
+		WORLD_H * 0.56, WORLD_H * 0.68, WORLD_H * 0.8, WORLD_H * 0.92]
 const CONNECTOR_XS := [300.0, WORLD_W - 300.0]
+const CURVED_LANE_COUNT := 6
+const CULDESAC_X := 92.0
 const LAKE_Y := WORLD_H * 0.53
 const MOUNTAIN_Y := 260.0
 const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a"), Color("805b73"), Color("b77945")]
@@ -124,7 +127,7 @@ func _ready() -> void:
 				"tone": k % 4, "dog": k in [1, 4, 7]})
 	_pet_stations = [
 		{"x": CONNECTOR_XS[0] - SIDEWALK_CENTER - 25.0, "y": (JUNCTIONS[0] + JUNCTIONS[1]) * 0.5},
-		{"x": CONNECTOR_XS[1] + SIDEWALK_CENTER + 25.0, "y": (JUNCTIONS[2] + JUNCTIONS[3]) * 0.5},
+		{"x": CONNECTOR_XS[1] + SIDEWALK_CENTER + 25.0, "y": (JUNCTIONS[6] + JUNCTIONS[7]) * 0.5},
 		{"x": _road_x(JUNCTIONS[2]) + SIDEWALK_CENTER + 24.0, "y": JUNCTIONS[2] + 220.0},
 	]
 	GameState.stats_changed.connect(_sync_mood)
@@ -143,7 +146,9 @@ func _build_house_positions() -> void:
 			var junction_y := float(JUNCTIONS[int(cross_index / 4)])
 			var offset := ROAD_HALF + WALK_W + YARD_GAP + HOUSE_D * 0.5
 			var y := junction_y + (-offset if cross_index % 2 == 0 else offset)
-			var cross_xs := [120.0, 600.0, 1200.0, 1680.0]
+			# Keep the outer lots beyond the connector sidewalks while retaining a
+			# short approach from each cross-street cul-de-sac.
+			var cross_xs := [70.0, 550.0, 1250.0, 1730.0]
 			_house_positions.append(Vector2(cross_xs[cross_index % 4], y))
 			continue
 		var candidate := WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
@@ -152,7 +157,7 @@ func _build_house_positions() -> void:
 		var direction := -1.0 if i % 4 < 2 else 1.0
 		for attempt in 20:
 			var house_x := _road_x(candidate) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5)
-			if _public_road_distance(Vector2(house_x, candidate), false) >= 178.0:
+			if _public_road_distance(Vector2(house_x, candidate), false) >= 210.0:
 				break
 			candidate = clampf(candidate + direction * 24.0, 180.0, WORLD_H - 180.0)
 		var x := _road_x(candidate) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5)
@@ -329,9 +334,9 @@ func _driveway_segment(i: int) -> PackedVector2Array:
 	var home := _house_c(i)
 	if i >= MAIN_HOUSE_COUNT:
 		var junction := float(JUNCTIONS[int((i - MAIN_HOUSE_COUNT) / 4)])
-		return PackedVector2Array([Vector2(home.x, junction),
+		return PackedVector2Array([Vector2(home.x, junction + _side(i) * (ROAD_HALF + WALK_W)),
 				Vector2(home.x, home.y - _side(i) * HOUSE_D * 0.46)])
-	return PackedVector2Array([Vector2(_road_x(home.y), home.y),
+	return PackedVector2Array([Vector2(_road_x(home.y) + _side(i) * (ROAD_HALF + WALK_W), home.y),
 			Vector2(home.x - _side(i) * HOUSE_W * 0.46, home.y)])
 
 
@@ -359,11 +364,13 @@ func _public_road_distance(point: Vector2, include_main := true) -> float:
 	if include_main:
 		best = absf(point.x - _road_x(point.y))
 	for junction in JUNCTIONS:
-		best = minf(best, absf(point.y - float(junction)))
+		var street_start := Vector2(CULDESAC_X, float(junction))
+		var street_end := Vector2(WORLD_W - CULDESAC_X, float(junction))
+		best = minf(best, Geometry2D.get_closest_point_to_segment(point, street_start, street_end).distance_to(point))
 	for connector in CONNECTOR_XS:
-		if point.y >= float(JUNCTIONS[0]) and point.y <= float(JUNCTIONS[3]):
+		if point.y >= float(JUNCTIONS[0]) and point.y <= float(JUNCTIONS[-1]):
 			best = minf(best, absf(point.x - float(connector)))
-	for lane_i in 3:
+	for lane_i in CURVED_LANE_COUNT:
 		var previous_lane_point := _curved_lane_point(lane_i, 0.0)
 		for point_i in range(1, 25):
 			var lane_point := _curved_lane_point(lane_i, float(point_i) / 24.0)
@@ -374,20 +381,29 @@ func _public_road_distance(point: Vector2, include_main := true) -> float:
 
 
 func _curved_lane_point(lane_i: int, t: float) -> Vector2:
-	var lane_y := WORLD_H * (0.27 + lane_i * 0.23)
+	var lane_y := WORLD_H * (0.14 + lane_i * 0.144)
 	return Vector2(90.0 + t * (WORLD_W - 180.0),
 			lane_y + sin(t * TAU * 1.5 + lane_i * 1.7) * (72.0 + lane_i * 9.0))
 
 
-func _neighbor_position(neighbor: Dictionary) -> Vector2:
+func _neighbor_position(neighbor: Dictionary, avoid_player := true) -> Vector2:
 	var route := int(neighbor.route)
+	var result: Vector2
 	if route == 0:
 		var wy := fposmod(float(neighbor.seed) + _time * float(neighbor.speed), WORLD_H - 280.0) + 140.0
-		return Vector2(_road_x(wy) + int(neighbor.side) * SIDEWALK_CENTER, wy)
-	var top := float(JUNCTIONS[0])
-	var span := float(JUNCTIONS[3]) - top
-	var wy := top + fposmod(float(neighbor.seed) + _time * float(neighbor.speed), span)
-	return Vector2(float(CONNECTOR_XS[route - 1]) + int(neighbor.side) * SIDEWALK_CENTER, wy)
+		result = Vector2(_road_x(wy) + int(neighbor.side) * SIDEWALK_CENTER, wy)
+	else:
+		var top := float(JUNCTIONS[0])
+		var span := float(JUNCTIONS[-1]) - top
+		var wy := top + fposmod(float(neighbor.seed) + _time * float(neighbor.speed), span)
+		result = Vector2(float(CONNECTOR_XS[route - 1]) + int(neighbor.side) * SIDEWALK_CENTER, wy)
+	if avoid_player and absf(result.y - _player_y) < 92.0 and absf(result.x - _player_x) < 58.0:
+		var strength := 1.0 - absf(result.y - _player_y) / 92.0
+		var pass_side := float(neighbor.side)
+		if is_zero_approx(pass_side):
+			pass_side = 1.0
+		result.x += pass_side * 58.0 * strength
+	return result
 
 
 func _avoid_neighbors(previous: Vector2, candidate: Vector2) -> Vector2:
@@ -531,7 +547,7 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 	# Two parallel neighborhood avenues connect the cross streets into a real
 	# street network, with roundabouts at alternating junctions.
 	var top_y := float(JUNCTIONS[0]) - ROAD_HALF - WALK_W
-	var bottom_y := float(JUNCTIONS[3]) + ROAD_HALF + WALK_W
+	var bottom_y := float(JUNCTIONS[-1]) + ROAD_HALF + WALK_W
 	for connector in CONNECTOR_XS:
 		var sx: float = float(connector) - _cam_x
 		draw_rect(Rect2(sx - ROAD_HALF - WALK_W, top_y - _cam, WALK_W, bottom_y - top_y), walk)
@@ -544,14 +560,21 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 	for junction in JUNCTIONS:
 		var sy: float = float(junction) - _cam
 		if sy > -100.0 and sy < h + 100.0:
-			draw_rect(Rect2(-_cam_x, sy - ROAD_HALF, WORLD_W, ROAD_HALF * 2.0), road)
-			draw_rect(Rect2(-_cam_x, sy - ROAD_HALF - WALK_W, WORLD_W, WALK_W), walk)
-			draw_rect(Rect2(-_cam_x, sy + ROAD_HALF, WORLD_W, WALK_W), walk)
-			for wx in range(0, int(WORLD_W), 90):
+			var street_x := CULDESAC_X - _cam_x
+			var street_w := WORLD_W - CULDESAC_X * 2.0
+			draw_rect(Rect2(street_x, sy - ROAD_HALF, street_w, ROAD_HALF * 2.0), road)
+			draw_rect(Rect2(street_x, sy - ROAD_HALF - WALK_W, street_w, WALK_W), walk)
+			draw_rect(Rect2(street_x, sy + ROAD_HALF, street_w, WALK_W), walk)
+			for end_x in [CULDESAC_X, WORLD_W - CULDESAC_X]:
+				var end_c := Vector2(float(end_x) - _cam_x, sy)
+				draw_circle(end_c, ROAD_HALF + WALK_W, walk)
+				draw_circle(end_c, ROAD_HALF, road)
+				draw_circle(end_c, 22.0, Color("4f9b64").lerp(Color("274c42"), _dusk * 0.6))
+			for wx in range(int(CULDESAC_X), int(WORLD_W - CULDESAC_X), 90):
 				draw_line(Vector2(wx - _cam_x, sy), Vector2(wx + 44.0 - _cam_x, sy), Color("ffe08a", 0.7), 4.0)
 	# Curving residential lanes break up the grid and make the neighborhood feel
 	# grown-in. They meet the main avenue at their ends and weave through blocks.
-	for lane_i in 3:
+	for lane_i in CURVED_LANE_COUNT:
 		var lane := PackedVector2Array()
 		for point_i in 15:
 			var t := float(point_i) / 14.0
@@ -559,6 +582,11 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 		draw_polyline(lane, walk, ROAD_HALF * 2.0 + WALK_W * 2.0, true)
 		draw_polyline(lane, road, ROAD_HALF * 2.0, true)
 		draw_polyline(lane, Color("ffe08a", 0.68), 4.0, true)
+		for t in [0.0, 1.0]:
+			var end_c := _curved_lane_point(lane_i, t) - Vector2(_cam_x, _cam)
+			draw_circle(end_c, ROAD_HALF + WALK_W, walk)
+			draw_circle(end_c, ROAD_HALF, road)
+			draw_circle(end_c, 20.0, Color("4f9b64").lerp(Color("274c42"), _dusk * 0.6))
 	for connector_i in CONNECTOR_XS.size():
 		for junction_i in range(connector_i, JUNCTIONS.size(), 2):
 			var circle_c := Vector2(float(CONNECTOR_XS[connector_i]) - _cam_x, float(JUNCTIONS[junction_i]) - _cam)
@@ -741,8 +769,6 @@ func _draw_yard(i: int) -> void:
 	var driveway := _driveway_segment(i)
 	var drive_start := driveway[0] - Vector2(_cam_x, _cam)
 	var drive_end := driveway[1] - Vector2(_cam_x, _cam)
-	draw_line(drive_start, drive_end, Color("b8b3a8").lerp(Color("686477"), _dusk * 0.5), DRIVEWAY_HALF * 1.55, true)
-	draw_line(drive_start, drive_end, Color(1, 1, 1, 0.16), 3.0, true)
 	var inches: float = _grass[i]
 	var tall := clampf((inches - 3.0) / 7.0, 0.0, 1.0)
 	_rr(r, Color("3f9e60").lerp(Color("b2b04a"), tall * 0.5).lerp(Color("1c5a3e"), _dusk * 0.5), 10)
@@ -753,6 +779,10 @@ func _draw_yard(i: int) -> void:
 		for a in [-0.55, 0.0, 0.55]:
 			var ang: float = a + t.a + sin(_time * 1.6 + p.y * 0.05) * 0.06
 			draw_line(p, p + Vector2(sin(ang), -cos(ang)) * len, base.lightened(float(t.h) * 0.2 - 0.1), 2.0, true)
+	# Draw pavement after the lawn so the driveway is a short, visible connection
+	# from the sidewalk edge to the entrance—not a stripe painted across the road.
+	draw_line(drive_start, drive_end, Color("b8b3a8").lerp(Color("686477"), _dusk * 0.5), DRIVEWAY_HALF * 1.55, true)
+	draw_line(drive_start, drive_end, Color(1, 1, 1, 0.16), 3.0, true)
 
 
 func _draw_house(i: int, sh: Vector2) -> void:
@@ -1000,7 +1030,7 @@ func _draw_full_map(w: float, h: float) -> void:
 	var map_rect := Rect2(panel.position + Vector2(24.0, 82.0), panel.size - Vector2(48.0, 132.0))
 	_rr(map_rect, Color("79b66a"), 14)
 	var font := ThemeDB.fallback_font
-	draw_string(font, panel.position + Vector2(24.0, 45.0), "NEIGHBORHOOD · 1,000 FT",
+	draw_string(font, panel.position + Vector2(24.0, 45.0), "NEIGHBORHOOD · 2,000 FT",
 			HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 48.0, 26, Color("1d3340"))
 	draw_string(font, panel.position + Vector2(24.0, 71.0), "Tap anywhere to return to the street",
 			HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 48.0, 17, Color("435a62"))
@@ -1014,15 +1044,15 @@ func _draw_full_map(w: float, h: float) -> void:
 	draw_polyline(main_route, road_col, 10.0, true)
 	for connector in CONNECTOR_XS:
 		var a := _map_point(Vector2(float(connector), float(JUNCTIONS[0])), map_rect)
-		var b := _map_point(Vector2(float(connector), float(JUNCTIONS[3])), map_rect)
+		var b := _map_point(Vector2(float(connector), float(JUNCTIONS[-1])), map_rect)
 		draw_line(a, b, walk_col, 15.0, true)
 		draw_line(a, b, road_col, 10.0, true)
 	for junction in JUNCTIONS:
-		var a := _map_point(Vector2(0.0, float(junction)), map_rect)
-		var b := _map_point(Vector2(WORLD_W, float(junction)), map_rect)
+		var a := _map_point(Vector2(CULDESAC_X, float(junction)), map_rect)
+		var b := _map_point(Vector2(WORLD_W - CULDESAC_X, float(junction)), map_rect)
 		draw_line(a, b, walk_col, 15.0, true)
 		draw_line(a, b, road_col, 10.0, true)
-	for lane_i in 3:
+	for lane_i in CURVED_LANE_COUNT:
 		var lane := PackedVector2Array()
 		for point_i in 24:
 			var t := float(point_i) / 23.0
