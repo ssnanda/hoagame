@@ -223,5 +223,5 @@ VERSION="$NEXT_VERSION"
 
 if [[ "$DO_COMMIT" == "true" ]]; then
   commit_release
-  [[ "$DO_PUSH" == "true" ]] && push_release
+  if [[ "$DO_PUSH" == "true" ]]; then push_release; fi
 fi
