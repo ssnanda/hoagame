@@ -12,20 +12,20 @@
       "iconURL": "https://raw.githubusercontent.com/ssnanda/hoagame/main/icon.png",
       "tintColor": "2F4858",
       "screenshotURLs": [],
-      "version": "0.1.23",
-      "buildVersion": "24",
+      "version": "0.1.24",
+      "buildVersion": "25",
       "versionDate": "2026-10-04",
-      "versionDescription": "Build 0.1.23+24",
-      "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-0.1.23-24/hoagame.ipa",
-      "size": 23985327,
+      "versionDescription": "Build 0.1.24+25",
+      "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-0.1.24-25/hoagame.ipa",
+      "size": 23988629,
       "versions": [
         {
-          "version": "0.1.23",
-          "buildVersion": "24",
+          "version": "0.1.24",
+          "buildVersion": "25",
           "date": "2026-10-04",
-          "localizedDescription": "Build 0.1.23+24",
-          "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-0.1.23-24/hoagame.ipa",
-          "size": 23985327,
+          "localizedDescription": "Build 0.1.24+25",
+          "downloadURL": "https://github.com/ssnanda/hoagame/releases/download/ios-0.1.24-25/hoagame.ipa",
+          "size": 23988629,
           "minOSVersion": "13.0"
         }
       ]
