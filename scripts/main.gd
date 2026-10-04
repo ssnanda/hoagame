@@ -116,6 +116,10 @@ func _build_ui() -> void:
 		col.add_child(bar)
 		_bars[key] = bar
 
+	var street := Control.new()
+	street.set_script(preload("res://scripts/street.gd"))
+	vbox.add_child(street)
+
 	_card_area = Control.new()
 	_card_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_card_area)
