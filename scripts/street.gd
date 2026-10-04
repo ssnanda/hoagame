@@ -4,8 +4,8 @@ extends Control
 
 signal visit(house: int)
 
-const HOUSE_COUNT := 6
-const HOUSE_SPACING := 440.0
+const HOUSE_COUNT := 12
+const HOUSE_SPACING := 390.0
 const HOUSE_MARGIN := 520.0
 const WORLD_H := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (HOUSE_COUNT - 1)
 const ROAD_HALF := 70.0
@@ -20,8 +20,10 @@ const NEAR_DIST := 120.0
 const TUFTS := 46
 const INCH_PX := 4.5
 const WALKER_K := 1.4
-const JUNCTIONS := [WORLD_H * 0.34, WORLD_H * 0.68]
-const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a")]
+const JUNCTIONS := [WORLD_H * 0.2, WORLD_H * 0.4, WORLD_H * 0.61, WORLD_H * 0.81]
+const LAKE_Y := WORLD_H * 0.53
+const MOUNTAIN_Y := 260.0
+const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a"), Color("805b73"), Color("b77945")]
 const QUIPS := [
 	"No complaints here. Suspicious.",
 	"Everything's up to code.",
@@ -74,7 +76,8 @@ func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
 	for i in HOUSE_COUNT:
-		_houses.append({"roof": ROOFS[i % ROOFS.size()], "kind": i % 3})
+		_houses.append({"roof": ROOFS[i % ROOFS.size()], "kind": i % 5,
+				"brick": i % 4 == 0, "solar": i % 5 == 3, "fence": i % 3 == 2})
 		_grass.append(3.0)
 	for j in TUFTS:
 		_tufts.append({"x": rng.randf(), "y": rng.randf(), "h": rng.randf_range(0.6, 1.0), "a": rng.randf_range(-0.3, 0.3)})
@@ -193,7 +196,7 @@ func _enter_near() -> void:
 
 
 func _tap_flag(pos: Vector2) -> bool:
-	if pos.x >= size.x - 158.0 and pos.y <= 226.0:
+	if pos.x >= size.x - 206.0 and pos.y <= 296.0:
 		return true
 	for i in HOUSE_COUNT:
 		var kind: String = _pins.get(i, "")
@@ -312,6 +315,7 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 		if k % 2 == 0:
 			draw_rect(Rect2(0, k * 120.0 - _cam, w, 120.0), Color(1, 1, 1, 0.045))
 		k += 1
+	_draw_landmarks(w, h)
 	var road := Color("3a4152").lerp(Color("22263a"), _dusk * 0.6)
 	var walk := Color("d9dde3").lerp(Color("8f8aa8"), _dusk * 0.6)
 	for junction in JUNCTIONS:
@@ -329,6 +333,38 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 		var rc := _road_x(wy)
 		draw_line(Vector2(rc, sy), Vector2(_road_x(wy + 40.0), sy + 40.0), Color("ffe08a", 0.7), 4.0)
 		k += 1
+
+
+func _draw_landmarks(w: float, h: float) -> void:
+	var lake_y := LAKE_Y - _cam
+	if lake_y > -300.0 and lake_y < h + 300.0:
+		_ellipse(Vector2(w - 72.0, lake_y), 178.0, 245.0, Color("b8d7b2").lerp(Color("314f55"), _dusk * 0.6))
+		_ellipse(Vector2(w - 64.0, lake_y), 157.0, 224.0, Color("4aa9c7").lerp(Color("25465d"), _dusk * 0.65))
+		for i in 6:
+			var ripple_y := lake_y - 150.0 + i * 58.0
+			draw_arc(Vector2(w - 80.0 + sin(i * 1.7) * 45.0, ripple_y), 22.0 + i * 3.0,
+					0.15, PI - 0.15, 16, Color(0.8, 0.95, 1.0, 0.35), 2.0)
+		# Small neighborhood dock.
+		draw_rect(Rect2(w - 205.0, lake_y - 18.0, 118.0, 36.0), Color("8a6747"))
+		for x in range(int(w - 198.0), int(w - 92.0), 18):
+			draw_line(Vector2(x, lake_y - 16.0), Vector2(x, lake_y + 16.0), Color("b38a60"), 2.0)
+	var mountain_y := MOUNTAIN_Y - _cam
+	if mountain_y > -260.0 and mountain_y < h + 260.0:
+		var back := Color("75869b").lerp(Color("343a57"), _dusk * 0.65)
+		var front := Color("536b64").lerp(Color("27394a"), _dusk * 0.65)
+		for i in 6:
+			var base_x := -80.0 + i * 165.0
+			var peak := Vector2(base_x + 85.0, mountain_y - 145.0 - (i % 3) * 32.0)
+			draw_colored_polygon(PackedVector2Array([
+					Vector2(base_x, mountain_y + 70.0), peak, Vector2(base_x + 190.0, mountain_y + 70.0)]), back)
+			draw_colored_polygon(PackedVector2Array([
+					peak, peak + Vector2(-31.0, 52.0), peak + Vector2(4.0, 39.0), peak + Vector2(34.0, 58.0)]),
+					Color("e8eef2", 0.9))
+		for i in 5:
+			var base_x := -30.0 + i * 190.0
+			draw_colored_polygon(PackedVector2Array([
+					Vector2(base_x, mountain_y + 95.0), Vector2(base_x + 95.0, mountain_y - 70.0),
+					Vector2(base_x + 210.0, mountain_y + 95.0)]), front)
 
 
 func _draw_ambience(w: float, h: float) -> void:
@@ -351,6 +387,8 @@ func _draw_ambience(w: float, h: float) -> void:
 			var wing := 5.0 + 4.0 * sin(_time * 8.0 + i)
 			draw_arc(Vector2(bx - 7.0, by), wing, PI, TAU, 8, Color(0.1, 0.15, 0.2, 0.35), 2.0)
 			draw_arc(Vector2(bx + 7.0, by), wing, PI, TAU, 8, Color(0.1, 0.15, 0.2, 0.35), 2.0)
+
+
 func _draw_road_band(left: float, right: float, color: Color, h: float) -> void:
 	var points := PackedVector2Array()
 	var step := 28.0
@@ -408,6 +446,13 @@ func _draw_house(i: int, sh: Vector2) -> void:
 		draw_rect(rect, roof.darkened(0.2), false, 4.0)
 		_rr(Rect2(c.x - 22.0, c.y - 40.0, 44.0, 36.0), Color("9ed2f2").lerp(Color("ffd36e"), _dusk), 6)
 		_rr(Rect2(c.x - 40.0 + 20.0 * -side, c.y + 22.0, 30.0, 30.0), Color("b8bdc8"), 4)
+	elif hs.kind == 4:
+		_rr(rect, Color("ddd1bb").lerp(Color("6f6470"), _dusk * 0.5), 12)
+		draw_colored_polygon(PackedVector2Array([
+				Vector2(rect.position.x - 8.0, c.y - 18.0), Vector2(c.x, rect.position.y - 24.0),
+				Vector2(rect.end.x + 8.0, c.y - 18.0), Vector2(c.x, c.y + 10.0)]), roof)
+		_rr(Rect2(c.x - 49.0, c.y + 26.0, 38.0, 30.0), Color("84b9d5").lerp(Color("ffd36e"), _dusk), 5)
+		_rr(Rect2(c.x + 11.0, c.y + 26.0, 38.0, 30.0), Color("84b9d5").lerp(Color("ffd36e"), _dusk), 5)
 	else:
 		draw_rect(Rect2(rect.position.x, rect.position.y, HOUSE_W * 0.5, HOUSE_D), roof.lightened(0.14))
 		draw_rect(Rect2(c.x, rect.position.y, HOUSE_W * 0.5, HOUSE_D), roof.darkened(0.14))
@@ -417,6 +462,33 @@ func _draw_house(i: int, sh: Vector2) -> void:
 			ry += 16.0
 		draw_line(Vector2(c.x, rect.position.y), Vector2(c.x, rect.end.y), roof.darkened(0.35), 3.0)
 		draw_rect(Rect2(c.x - side * -34.0 - 10.0, rect.position.y + 18.0, 20.0, 22.0), Color("3b3f4f"))
+	if bool(hs.brick):
+		var by := rect.position.y + 12.0
+		while by < rect.end.y:
+			draw_line(Vector2(rect.position.x + 6.0, by), Vector2(rect.end.x - 6.0, by), Color(0.22, 0.12, 0.08, 0.22), 2.0)
+			by += 18.0
+	if bool(hs.solar):
+		for row in 2:
+			for col in 3:
+				var panel := Rect2(c.x - 45.0 + col * 31.0, c.y - 48.0 + row * 27.0, 27.0, 22.0)
+				_rr(panel, Color("16364f"), 2)
+				draw_rect(panel, Color("65a8c9", 0.7), false, 1.5)
+	if bool(hs.fence):
+		var fence_x := inner_x - side * 58.0
+		for fy in range(int(c.y - 78.0), int(c.y + 88.0), 22):
+			draw_line(Vector2(fence_x, fy), Vector2(fence_x, fy + 14.0), Color("efe0bd"), 5.0)
+		draw_line(Vector2(fence_x, c.y - 72.0), Vector2(fence_x, c.y + 82.0), Color("cbb995"), 2.0)
+	# Door, walkway lamps, and foundation details keep each home readable from above.
+	var door := Rect2(c.x - side * (HOUSE_W * 0.5 - 7.0) - 8.0, c.y - 14.0, 16.0, 28.0)
+	_rr(door, Color("56372b"), 3)
+	for lamp_y in [-34.0, 34.0]:
+		draw_circle(Vector2(inner_x - side * 18.0, c.y + lamp_y), 4.0, Color("ffd36e"))
+	# Chimneys and air-conditioning units vary the roofline.
+	if i % 2 == 0:
+		_rr(Rect2(c.x + side * 38.0 - 9.0, c.y - 63.0, 18.0, 26.0), Color("765044"), 3)
+	else:
+		_rr(Rect2(c.x - side * 48.0 - 12.0, c.y + 45.0, 24.0, 24.0), Color("aeb6bc"), 4)
+		draw_circle(Vector2(c.x - side * 48.0, c.y + 57.0), 7.0, Color("6e7880"), false, 2.0)
 	if _dusk > 0.05:
 		_ellipse(c + Vector2(side * 30.0, 30.0), 20.0, 16.0, Color("ffd36e", 0.55 * _dusk))
 	if hs.kind == 2:
@@ -511,7 +583,7 @@ func _chevron(c: Vector2, up: bool, alpha: float) -> void:
 
 func _draw_ui(w: float, h: float) -> void:
 	var font := ThemeDB.fallback_font
-	_draw_map(Rect2(w - 158.0, 16.0, 142.0, 210.0))
+	_draw_map(Rect2(w - 206.0, 16.0, 190.0, 280.0))
 	if _dragging:
 		var knob := _anchor + (_finger - _anchor).limit_length(STICK_RANGE)
 		draw_arc(_anchor, STICK_RANGE * 0.62, 0.0, TAU, 40, Color(1, 1, 1, 0.28), 4.0, true)
@@ -546,6 +618,14 @@ func _draw_map(rect: Rect2) -> void:
 	draw_string(ThemeDB.fallback_font, rect.position + Vector2(12.0, 25.0), "MAP",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("d8edf6"))
 	var inner := Rect2(rect.position + Vector2(10.0, 34.0), rect.size - Vector2(20.0, 44.0))
+	var lake_my := inner.position.y + (1.0 - LAKE_Y / WORLD_H) * inner.size.y
+	_ellipse(Vector2(inner.end.x - 11.0, lake_my), 28.0, 22.0, Color("4aa9c7", 0.85))
+	var mountain_my := inner.position.y + (1.0 - MOUNTAIN_Y / WORLD_H) * inner.size.y
+	for i in 3:
+		var mx := inner.position.x + 18.0 + i * 43.0
+		draw_colored_polygon(PackedVector2Array([
+				Vector2(mx - 18.0, mountain_my + 12.0), Vector2(mx, mountain_my - 18.0 - i * 3.0),
+				Vector2(mx + 20.0, mountain_my + 12.0)]), Color("75869b"))
 	var route := PackedVector2Array()
 	for i in 25:
 		var wy := WORLD_H * float(i) / 24.0

@@ -35,7 +35,6 @@ var _locked := false
 var _reading := 1.0
 var _field: Field
 var _reading_label: Label
-var _lock_btn: Button
 var _verdict_row: HBoxContainer
 var _result: Label
 var _next_btn: Button
@@ -141,7 +140,7 @@ func _ready() -> void:
 	box.add_child(_label("LAWN INSPECTION — %s" % who, 24, Color("6b6b6b")))
 	var complaint := _label(OPENERS[randi() % OPENERS.size()], 30, Color("1c1b1f"))
 	box.add_child(complaint)
-	box.add_child(_label("Drag to line the marker up with the tallest blade.", 22, Color("6b6b6b")))
+	box.add_child(_label("Line up the marker, then choose one verdict.", 22, Color("6b6b6b")))
 
 	_field = Field.new()
 	_field.setup(inches)
@@ -152,19 +151,14 @@ func _ready() -> void:
 	_reading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_reading_label)
 
-	_lock_btn = _button("LOCK MEASUREMENT")
-	_lock_btn.pressed.connect(_lock)
-	box.add_child(_lock_btn)
-
 	_verdict_row = HBoxContainer.new()
 	_verdict_row.add_theme_constant_override("separation", 16)
-	_verdict_row.hide()
 	box.add_child(_verdict_row)
 	var fine_btn := _button("ISSUE FINE")
 	fine_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fine_btn.pressed.connect(_rule.bind(true))
 	_verdict_row.add_child(fine_btn)
-	var slide_btn := _button("LET IT SLIDE")
+	var slide_btn := _button("NO VIOLATION")
 	slide_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slide_btn.pressed.connect(_rule.bind(false))
 	_verdict_row.add_child(slide_btn)
@@ -183,16 +177,13 @@ func _on_reading(value: float) -> void:
 	_reading_label.text = "Reading: %.1f in" % value
 
 
-func _lock() -> void:
+func _rule(fine: bool) -> void:
+	if _locked:
+		return
 	_locked = true
 	_field.locked = true
 	_field.queue_redraw()
-	_lock_btn.hide()
-	_verdict_row.show()
-	_reading_label.text = "Measured %.1f in (limit %d)" % [_reading, int(LIMIT_IN)]
-
-
-func _rule(fine: bool) -> void:
+	_reading_label.text = "Recorded %.1f in (limit %d)" % [_reading, int(LIMIT_IN)]
 	var violation := inches > LIMIT_IN
 	var correct := fine == violation
 	var precise := absf(_reading - inches) <= 0.6

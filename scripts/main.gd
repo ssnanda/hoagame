@@ -6,7 +6,10 @@ const STREET_SCRIPT := preload("res://scripts/street.gd")
 const LAWN_SCRIPT := preload("res://scripts/lawn_game.gd")
 const CARD_SIZE := Vector2(600, 640)
 const STAT_LABELS := {"budget": "BUDGET", "happiness": "HAPPY", "power": "POWER"}
-const RESIDENTS := ["The Hendersons", "Gary & Pam", "Dave, Lot 27", "Linda", "Mr. Okafor", "The Pattersons"]
+const RESIDENTS := [
+	"The Hendersons", "Gary & Pam", "Dave, Lot 27", "Linda", "Mr. Okafor", "The Pattersons",
+	"Priya & Arun", "The Garcias", "Martha, Lot 31", "Coach Williams", "The Chens", "Beth & Her Gnomes",
+]
 
 var _bars: Dictionary = {}
 var _day_label: Label
@@ -14,6 +17,7 @@ var _score_label: Label
 var _best_label: Label
 var _task_label: Label
 var _save_label: Label
+var _version_label: Label
 var _street: Control
 var _margin: MarginContainer
 var _overlay: ColorRect
@@ -65,7 +69,7 @@ func _start() -> void:
 
 
 func _new_day() -> void:
-	var count := mini(3 + (GameState.day - 1) / 4, 5)
+	var count := mini(4 + (GameState.day - 1) / 3, 8)
 	var houses: Array = range(STREET_SCRIPT.HOUSE_COUNT)
 	houses.shuffle()
 	_complaints = {}
@@ -302,9 +306,16 @@ func _build_ui() -> void:
 	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	info.add_child(_best_label)
 
-	_save_label = _make_label("AUTO-SAVE", 18, Color("b9d8e8"), true)
+	var meta := HBoxContainer.new()
+	vbox.add_child(meta)
+	_save_label = _make_label("AUTO-SAVE", 18, Color("b9d8e8"), false)
 	_save_label.modulate.a = 0.35
-	vbox.add_child(_save_label)
+	_save_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meta.add_child(_save_label)
+	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
+	_version_label = _make_label("v%s" % version, 18, Color("b9d8e8"), false)
+	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	meta.add_child(_version_label)
 
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 20)
