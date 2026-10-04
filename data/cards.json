@@ -82,5 +82,47 @@
     "text": "For $6,000 we'll install cameras that mostly point at raccoons.",
     "left": {"label": "No thanks", "effects": {"happiness": 4, "power": -5}},
     "right": {"label": "Buy cameras", "effects": {"budget": -14, "power": 14}}
+  },
+  {
+    "id": "basketball",
+    "who": "Architectural Committee",
+    "text": "A portable basketball hoop has remained portable in exactly one spot for nine months.",
+    "left": {"label": "Let them play", "effects": {"happiness": 10, "power": -6}},
+    "right": {"label": "Flag the hoop", "effects": {"budget": 4, "power": 8, "happiness": -8}}
+  },
+  {
+    "id": "paint",
+    "who": "Martha, Lot 31",
+    "text": "The new front door is Ocean Mist. The approved color is Coastal Whisper.",
+    "left": {"label": "Close enough", "effects": {"happiness": 7, "power": -5}},
+    "right": {"label": "Repaint it", "effects": {"power": 9, "happiness": -10}}
+  },
+  {
+    "id": "dog",
+    "who": "Neighborhood Watch",
+    "text": "A corgi has been seen off leash. Witnesses describe the suspect as extremely approachable.",
+    "left": {"label": "Pet suspect", "effects": {"happiness": 9, "power": -5}},
+    "right": {"label": "Written warning", "effects": {"power": 7, "happiness": -4}}
+  },
+  {
+    "id": "garage",
+    "who": "Anonymous Photo Submission",
+    "text": "A garage door stayed open for forty-three minutes, exposing an unapproved kayak.",
+    "left": {"label": "Delete photo", "effects": {"happiness": 6, "power": -7}},
+    "right": {"label": "Open a case", "effects": {"budget": -3, "power": 10}}
+  },
+  {
+    "id": "blockparty",
+    "who": "Social Committee",
+    "text": "The block party needs $900 for a band whose only song is Sweet Caroline.",
+    "left": {"label": "Use a playlist", "effects": {"budget": 5, "happiness": -3}},
+    "right": {"label": "Book the band", "effects": {"budget": -10, "happiness": 13}}
+  },
+  {
+    "id": "garden",
+    "who": "Gary, Again",
+    "text": "The community garden contains tomatoes taller than the approved shrub line.",
+    "left": {"label": "Harvest them", "effects": {"happiness": 11, "power": -6}},
+    "right": {"label": "Trim tomatoes", "effects": {"power": 8, "happiness": -9}}
   }
 ]

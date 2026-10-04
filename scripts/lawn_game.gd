@@ -11,14 +11,21 @@ const OPENERS := [
 	"I saw a rabbit go in and not come out. Please measure the grass.",
 	"My property value is wilting. Check that lawn. Limit: 6 inches.",
 	"It's technically a meadow, but not an approved one. Measure it.",
+	"The mower has been 'in the shop' since spring. Verify the evidence.",
+	"Someone claims this is native landscaping. The bylaws claim otherwise.",
+	"A tennis ball disappeared in this grass. Measure before searching.",
 ]
 const FINE_OK := [
 	"Fined. He mutters, 'It's a meadow, Karen.'",
 	"Fine issued. A lawnmower is ordered, reluctantly.",
+	"Violation confirmed. The mower starts before you leave the driveway.",
+	"Citation posted. The grass has lost its appeal hearing.",
 ]
 const SLIDE_OK := [
 	"Left alone. The neighbor waves from a very short lawn.",
 	"Dismissed. Nobody loves a tape measure.",
+	"Compliant. The lawn receives an official nod.",
+	"No violation. The neighborhood group chat goes briefly quiet.",
 ]
 
 var inches := 5.0

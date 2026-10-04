@@ -14,6 +14,8 @@ var _locked := false
 var _who: Label
 var _body: Label
 var _hint: Label
+var _left_btn: Button
+var _right_btn: Button
 
 
 func _ready() -> void:
@@ -49,6 +51,18 @@ func _ready() -> void:
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_body)
 
+	var divider := HSeparator.new()
+	box.add_child(divider)
+	var choices := HBoxContainer.new()
+	choices.add_theme_constant_override("separation", 16)
+	box.add_child(choices)
+	_left_btn = _make_button()
+	_left_btn.pressed.connect(fling.bind("left"))
+	choices.add_child(_left_btn)
+	_right_btn = _make_button()
+	_right_btn.pressed.connect(fling.bind("right"))
+	choices.add_child(_right_btn)
+
 
 func setup(card_data: Dictionary, pos: Vector2) -> void:
 	data = card_data
@@ -56,6 +70,8 @@ func setup(card_data: Dictionary, pos: Vector2) -> void:
 	position = pos
 	_who.text = str(data.get("who", ""))
 	_body.text = str(data.get("text", ""))
+	_left_btn.text = str(data.get("left", {}).get("label", "LET IT GO"))
+	_right_btn.text = str(data.get("right", {}).get("label", "FLAG IT"))
 
 
 ## Programmatic swipe (keyboard / buttons / tests).
@@ -63,6 +79,8 @@ func fling(side: String) -> void:
 	if _locked:
 		return
 	_locked = true
+	_left_btn.disabled = true
+	_right_btn.disabled = true
 	_set_hint(-1.0 if side == "left" else 1.0)
 	var dir := -1.0 if side == "left" else 1.0
 	var tween := create_tween().set_parallel(true)
@@ -113,3 +131,11 @@ func _make_label(font_size: int, color: Color) -> Label:
 	label.add_theme_color_override("font_color", color)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
+
+
+func _make_button() -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(0, 92)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.add_theme_font_size_override("font_size", 25)
+	return button

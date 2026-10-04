@@ -13,6 +13,7 @@ var _day_label: Label
 var _score_label: Label
 var _best_label: Label
 var _task_label: Label
+var _save_label: Label
 var _street: Control
 var _margin: MarginContainer
 var _overlay: ColorRect
@@ -24,6 +25,9 @@ var _complaints: Dictionary = {}
 var _grass: Array = []
 var _active := -1
 var _done := 0
+var _completed: Array = []
+var _phase := "street"
+var _evening_bonus: Dictionary = {}
 
 
 func _ready() -> void:
@@ -31,7 +35,15 @@ func _ready() -> void:
 	GameState.stats_changed.connect(_refresh)
 	GameState.game_over.connect(_on_game_over)
 	await get_tree().process_frame
-	_start()
+	if GameState.has_saved_run:
+		_resume_run()
+	else:
+		_start()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED and is_instance_valid(_street) and not _is_over:
+		_save_progress()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -47,6 +59,7 @@ func _start() -> void:
 	_is_over = false
 	_over_panel.hide()
 	_close_overlay()
+	GameState.clear_run()
 	GameState.new_game()
 	_new_day()
 
@@ -57,6 +70,9 @@ func _new_day() -> void:
 	houses.shuffle()
 	_complaints = {}
 	_grass = []
+	_completed = []
+	_phase = "street"
+	_evening_bonus = {}
 	for i in STREET_SCRIPT.HOUSE_COUNT:
 		_grass.append(randf_range(2.5, 4.5))
 	var pins := {}
@@ -72,11 +88,36 @@ func _new_day() -> void:
 	_street.set_day(pins, _grass)
 	_update_task()
 	_float("DAY %d" % GameState.day, Color("ffd36e"))
+	_save_progress()
+
+
+func _resume_run() -> void:
+	var world := GameState.saved_world()
+	if not world.has("complaints") or not world.has("grass"):
+		_start()
+		return
+	_complaints = world.get("complaints", {}).duplicate(true)
+	_grass = world.get("grass", []).duplicate(true)
+	_completed = world.get("completed", []).duplicate()
+	_done = _completed.size()
+	_phase = str(world.get("phase", "street"))
+	_evening_bonus = world.get("evening_bonus", {}).duplicate(true)
+	var pins := {}
+	for house in _complaints:
+		var h := int(house)
+		pins[h] = "done" if h in _completed else str(_complaints[house].get("kind", "card"))
+	var saved_position = world.get("player_position", Vector2(-1.0, float(world.get("player_y", -1.0))))
+	_street.set_day(pins, _grass, _done, saved_position)
+	_update_task()
+	_refresh()
+	_float("WELCOME BACK", Color("ffd36e"))
+	if _phase == "evening":
+		_show_evening(GameState.day, _evening_bonus)
 
 
 func _update_task() -> void:
 	var left := _complaints.size() - _done
-	_task_label.text = "Drag up/down to walk  ·  %d complaint%s left" % [left, "" if left == 1 else "s"]
+	_task_label.text = "Tap a flag · drag to walk  ·  %d left" % left
 
 
 func _on_visit(house: int) -> void:
@@ -118,15 +159,26 @@ func _resolve(effects: Dictionary, points: int, correct) -> void:
 		return
 	_float("%+d" % gained, Color("7ee081") if gained >= 0 else Color("ff6b5a"))
 	_street.mark_done(_active)
+	if _active not in _completed:
+		_completed.append(_active)
 	_done += 1
 	_update_task()
 	if _done >= _complaints.size():
 		_evening()
+	else:
+		_save_progress(true)
 
 
 func _evening() -> void:
 	var finished := GameState.day
 	var bonus := GameState.end_day()
+	_phase = "evening"
+	_evening_bonus = bonus.duplicate(true)
+	_save_progress()
+	_show_evening(finished, bonus)
+
+
+func _show_evening(finished: int, bonus: Dictionary) -> void:
 	_overlay.show()
 	var panel := Panel.new()
 	panel.add_theme_stylebox_override("panel", _card_style())
@@ -158,6 +210,24 @@ func _evening() -> void:
 		GameState.next_day()
 		_new_day())
 	box.add_child(btn)
+
+
+func _save_progress(show_feedback := false) -> void:
+	if not is_instance_valid(_street) or _complaints.is_empty() or _is_over:
+		return
+	GameState.save_run({
+		"complaints": _complaints.duplicate(true),
+		"grass": _grass.duplicate(),
+		"completed": _completed.duplicate(),
+		"phase": _phase,
+		"evening_bonus": _evening_bonus.duplicate(true),
+		"player_position": _street.get_player_position(),
+	})
+	if show_feedback and is_instance_valid(_save_label):
+		_save_label.text = "SAVED"
+		_save_label.modulate.a = 1.0
+		var tween := create_tween()
+		tween.tween_property(_save_label, "modulate:a", 0.35, 1.2).set_delay(0.5)
 
 
 func _close_overlay() -> void:
@@ -231,6 +301,10 @@ func _build_ui() -> void:
 	_best_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	info.add_child(_best_label)
+
+	_save_label = _make_label("AUTO-SAVE", 18, Color("b9d8e8"), true)
+	_save_label.modulate.a = 0.35
+	vbox.add_child(_save_label)
 
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 20)

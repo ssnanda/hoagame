@@ -24,14 +24,31 @@ var best := 0
 var streak := 0
 var cards: Array = []
 var deck: Array = []
+var has_saved_run := false
+var _saved_world: Dictionary = {}
 
 
 func _ready() -> void:
 	_load_cards()
+	_load_save()
+	if not has_saved_run:
+		new_game()
+
+
+func _load_save() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
 		best = int(cfg.get_value("score", "best", 0))
-	new_game()
+		has_saved_run = bool(cfg.get_value("run", "active", false))
+		if has_saved_run:
+			day = int(cfg.get_value("run", "day", 1))
+			score = int(cfg.get_value("run", "score", 0))
+			streak = int(cfg.get_value("run", "streak", 0))
+			stats = cfg.get_value("run", "stats", {}).duplicate(true)
+			deck = cfg.get_value("run", "deck", []).duplicate(true)
+			_saved_world = cfg.get_value("run", "world", {}).duplicate(true)
+			if stats.is_empty():
+				has_saved_run = false
 
 
 func new_game() -> void:
@@ -42,6 +59,37 @@ func new_game() -> void:
 	streak = 0
 	_refill_deck()
 	stats_changed.emit()
+
+
+func save_run(world: Dictionary) -> void:
+	_save_best()
+	has_saved_run = true
+	_saved_world = world.duplicate(true)
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	cfg.set_value("score", "best", best)
+	cfg.set_value("run", "active", true)
+	cfg.set_value("run", "day", day)
+	cfg.set_value("run", "score", score)
+	cfg.set_value("run", "streak", streak)
+	cfg.set_value("run", "stats", stats.duplicate(true))
+	cfg.set_value("run", "deck", deck.duplicate(true))
+	cfg.set_value("run", "world", _saved_world)
+	cfg.save(SAVE_PATH)
+
+
+func saved_world() -> Dictionary:
+	return _saved_world.duplicate(true)
+
+
+func clear_run() -> void:
+	has_saved_run = false
+	_saved_world = {}
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	cfg.set_value("score", "best", best)
+	cfg.set_value("run", "active", false)
+	cfg.save(SAVE_PATH)
 
 
 func next_card() -> Dictionary:
@@ -64,6 +112,7 @@ func apply_effects(effects: Dictionary) -> void:
 	var reason := _check_end()
 	if reason != "":
 		_save_best()
+		clear_run()
 		game_over.emit(reason)
 
 
