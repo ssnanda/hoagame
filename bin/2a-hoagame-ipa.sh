@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# HOA President — iOS IPA builder (+ optional publish)
-# ----------------------------------------------------
+# HOA President — iOS IPA builder + publisher
+# --------------------------------------------
 # Exports a development-signed IPA with Godot (headless) and moves it to
 # ~/Documents/GitHub/ipa/hoagame.ipa.
 #
 # Version bumping lives in bin/1-bump-version.sh. This script calls it when the
 # working tree has uncommitted changes (or with --bump/--version/--no-bump).
-# By default it builds and saves the IPA locally without pushing or publishing.
-# Add --push to push the branch, or --publish to push and refresh ios-latest.
+# By default it builds the IPA, pushes the branch, updates altstore.json, and
+# refreshes the rolling ios-latest GitHub release.
 #
 # Common runs:
 #   ./bin/2a-hoagame-ipa.sh
 #   ./bin/2a-hoagame-ipa.sh --bump patch
-#   ./bin/2a-hoagame-ipa.sh --bump patch --publish
+#   ./bin/2a-hoagame-ipa.sh --local
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
@@ -39,8 +39,8 @@ ALTSTORE_ICON_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$ALTSTORE_BRAN
 ALTSTORE_MIN_IOS="13.0"
 
 GIT_COMMIT="true"
-GIT_PUSH="false"
-GITHUB_RELEASE="false"
+GIT_PUSH="true"
+GITHUB_RELEASE="true"
 DELETE_ONLY="false"
 
 usage() {
@@ -56,15 +56,17 @@ Options:
   --no-bump             Build the current version, don't bump
   --delete              Delete the local IPA and exit (no build)
   --repo OWNER/REPO     Override GitHub repo (default: ssnanda/hoagame)
-  --push                Push the branch after building
-  --publish             Push + refresh ios-latest and altstore.json
+  --local               Build locally without pushing or publishing
+  --no-publish          Build and push, but don't refresh ios-latest
+  --push                Explicitly enable the default push behavior
+  --publish             Explicitly enable the default publish behavior
   --no-git-commit       Rewrite version files only, don't commit the bump
   --help
 
 Env:
   GODOT=/path/to/Godot  (default /Applications/Godot.app/Contents/MacOS/Godot)
 
-Default: bump only when the tree is dirty, then build and save the IPA locally.
+Default: bump when dirty, build IPA, push, update altstore.json, and publish ios-latest.
 One-time setup: Godot > Editor > Manage Export Templates > Download.
 USAGE
 }
@@ -235,6 +237,8 @@ while [[ $# -gt 0 ]]; do
     --no-bump) NO_BUMP="true"; shift ;;
     --delete) DELETE_ONLY="true"; shift ;;
     --repo) GITHUB_REPO="${2:-}"; shift 2 ;;
+    --local) GIT_PUSH="false"; GITHUB_RELEASE="false"; shift ;;
+    --no-publish) GITHUB_RELEASE="false"; shift ;;
     --push) GIT_PUSH="true"; shift ;;
     --publish) GIT_PUSH="true"; GITHUB_RELEASE="true"; shift ;;
     --no-git-commit) GIT_COMMIT="false"; shift ;;
