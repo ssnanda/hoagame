@@ -8,6 +8,7 @@ const HOUSE_COUNT := 12
 const HOUSE_SPACING := 390.0
 const HOUSE_MARGIN := 520.0
 const WORLD_H := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (HOUSE_COUNT - 1)
+const WORLD_W := 1800.0
 const ROAD_HALF := 70.0
 const WALK_W := 46.0
 const HOUSE_W := 150.0
@@ -37,8 +38,9 @@ const QUIPS := [
 ]
 
 var _player_y := WORLD_H - 260.0
-var _player_x := 360.0
+var _player_x := WORLD_W * 0.5
 var _cam := 0.0
+var _cam_x := 0.0
 var _stick := Vector2.ZERO
 var _anchor := Vector2.ZERO
 var _finger := Vector2.ZERO
@@ -104,19 +106,27 @@ func _ready() -> void:
 
 
 func house_y(i: int) -> float:
+	if i >= 8:
+		var junction_y := float(JUNCTIONS[i - 8])
+		var offset := ROAD_HALF + WALK_W + YARD_GAP + HOUSE_D * 0.5
+		return junction_y + (-offset if i % 2 == 0 else offset)
 	return WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
 
 
 func _side(i: int) -> int:
+	if i >= 8:
+		return -1 if i % 2 == 0 else 1
 	return -1 if i % 2 == 0 else 1
 
 
 func _house_c(i: int) -> Vector2:
+	if i >= 8:
+		return Vector2(240.0 if _side(i) < 0 else WORLD_W - 240.0, house_y(i))
 	return Vector2(_road_x(house_y(i)) + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5), house_y(i))
 
 
 func _road_x(wy: float) -> float:
-	return size.x * 0.5 + sin(wy / 430.0) * 34.0 + sin(wy / 170.0) * 12.0
+	return WORLD_W * 0.5 + sin(wy / 430.0) * 70.0 + sin(wy / 170.0) * 20.0
 
 
 ## pins: house index -> "lawn" | "card". grass: tall-grass height in inches per house.
@@ -129,7 +139,7 @@ func set_day(pins: Dictionary, grass: Array, completed := 0, saved_position = nu
 	_weather = (GameState.day - 1) % 3
 	if saved_position is Vector2 and saved_position.y >= 0.0:
 		_player_y = clampf(saved_position.y, 140.0, WORLD_H - 140.0)
-		_player_x = saved_position.x
+		_player_x = saved_position.x if saved_position.x >= 0.0 else _road_x(_player_y)
 	else:
 		_player_x = _road_x(_player_y)
 	_update_dusk()
@@ -202,7 +212,7 @@ func _tap_flag(pos: Vector2) -> bool:
 		var kind: String = _pins.get(i, "")
 		if kind != "lawn" and kind != "card":
 			continue
-		var pin := _house_c(i) - Vector2(0, _cam) + Vector2(0, -18.0)
+		var pin := _house_c(i) - Vector2(_cam_x, _cam) + Vector2(0, -18.0)
 		var house_rect := Rect2(pin - Vector2(HOUSE_W * 0.6, HOUSE_D * 0.6), Vector2(HOUSE_W * 1.2, HOUSE_D * 1.2))
 		if pos.distance_to(pin) <= 72.0 or house_rect.has_point(pos):
 			visit.emit(i)
@@ -224,12 +234,20 @@ func _process(delta: float) -> void:
 		_player_y = clampf(_player_y + velocity.y * delta, 140.0, WORLD_H - 140.0)
 		_player_x += velocity.x * delta
 		var road_center := _road_x(_player_y)
-		var near_junction := false
-		for jy in JUNCTIONS:
-			if absf(_player_y - jy) < 105.0:
-				near_junction = true
-		var reach := size.x * 0.42 if near_junction else ROAD_HALF + WALK_W * 0.72
-		_player_x = clampf(_player_x, road_center - reach, road_center + reach)
+		var closest_junction := float(JUNCTIONS[0])
+		for junction in JUNCTIONS:
+			if absf(_player_y - float(junction)) < absf(_player_y - closest_junction):
+				closest_junction = float(junction)
+		var on_side_street := absf(_player_x - road_center) > ROAD_HALF + WALK_W and absf(_player_y - closest_junction) < 150.0
+		if on_side_street:
+			_player_y = clampf(_player_y, closest_junction - ROAD_HALF - WALK_W * 0.65,
+					closest_junction + ROAD_HALF + WALK_W * 0.65)
+			_player_x = clampf(_player_x, 120.0, WORLD_W - 120.0)
+		elif absf(_player_y - closest_junction) < 115.0:
+			_player_x = clampf(_player_x, 120.0, WORLD_W - 120.0)
+		else:
+			_player_x = clampf(_player_x, road_center - ROAD_HALF - WALK_W * 0.72,
+					road_center + ROAD_HALF + WALK_W * 0.72)
 		_face = velocity.angle() + PI * 0.5
 		_phase += delta * 10.0 * strength
 		_moving = true
@@ -237,6 +255,7 @@ func _process(delta: float) -> void:
 		_moving = false
 	_angle = lerp_angle(_angle, _face, 1.0 - exp(-12.0 * delta))
 	_cam = clampf(_player_y - size.y * 0.58, 0.0, maxf(0.0, WORLD_H - size.y))
+	_cam_x = clampf(_player_x - size.x * 0.5, 0.0, maxf(0.0, WORLD_W - size.x))
 	_near = -1
 	var best := NEAR_DIST
 	for i in HOUSE_COUNT:
@@ -274,14 +293,14 @@ func _draw() -> void:
 	_draw_ambience(w, h)
 	for car in _cars:
 		if _on_screen(car.y):
-			_draw_car(_road_x(car.y) + car.side * (ROAD_HALF - 24.0), car.y - _cam, car.col)
+			_draw_car(_road_x(car.y) - _cam_x + car.side * (ROAD_HALF - 24.0), car.y - _cam, car.col)
 	for i in HOUSE_COUNT:
 		if _on_screen(house_y(i), 320.0):
 			_draw_yard(i)
 	var sh := Vector2(18.0, 22.0) * (1.0 + _dusk * 1.2)
 	for t in _trees:
 		if _on_screen(t.y):
-			var tc := Vector2(_road_x(t.y) + t.side * (ROAD_HALF + WALK_W + t.off + t.r), t.y - _cam)
+			var tc := Vector2(_road_x(t.y) - _cam_x + t.side * (ROAD_HALF + WALK_W + t.off + t.r), t.y - _cam)
 			_ellipse(tc + sh * 0.9, t.r, t.r, Color(0, 0, 0, 0.18))
 	for i in HOUSE_COUNT:
 		if _on_screen(house_y(i), 320.0):
@@ -289,7 +308,7 @@ func _draw() -> void:
 	for t in _trees:
 		if _on_screen(t.y):
 			var sway := sin(_time * 1.3 + float(t.phase)) * 3.0
-			var tc := Vector2(_road_x(t.y) + t.side * (ROAD_HALF + WALK_W + t.off + t.r) + sway, t.y - _cam)
+			var tc := Vector2(_road_x(t.y) - _cam_x + t.side * (ROAD_HALF + WALK_W + t.off + t.r) + sway, t.y - _cam)
 			draw_line(tc + Vector2(0, 30.0), tc + Vector2(-sway * 0.4, -8.0), Color("6b4931"), 10.0, true)
 			var g := Color("2f9e57").lightened(float(t.tone)).lerp(Color("1c5a3e"), _dusk * 0.7)
 			_ellipse(tc, t.r, t.r * 0.9, g)
@@ -299,7 +318,7 @@ func _draw() -> void:
 		if _on_screen(house_y(i), 320.0):
 			_draw_highlight(i)
 			_draw_pin(i)
-	_draw_walker(Vector2(_player_x, _player_y - _cam))
+	_draw_walker(Vector2(_player_x - _cam_x, _player_y - _cam))
 	if _dusk > 0.0:
 		draw_rect(Rect2(0, 0, w, h), Color(0.12, 0.1, 0.32, 0.4 * _dusk))
 	if _gloom > 0.0:
@@ -321,39 +340,42 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 	for junction in JUNCTIONS:
 		var sy: float = float(junction) - _cam
 		if sy > -100.0 and sy < h + 100.0:
-			draw_rect(Rect2(0, sy - ROAD_HALF, w, ROAD_HALF * 2.0), road)
-			draw_rect(Rect2(0, sy - ROAD_HALF - WALK_W, w, WALK_W), walk)
-			draw_rect(Rect2(0, sy + ROAD_HALF, w, WALK_W), walk)
+			draw_rect(Rect2(-_cam_x, sy - ROAD_HALF, WORLD_W, ROAD_HALF * 2.0), road)
+			draw_rect(Rect2(-_cam_x, sy - ROAD_HALF - WALK_W, WORLD_W, WALK_W), walk)
+			draw_rect(Rect2(-_cam_x, sy + ROAD_HALF, WORLD_W, WALK_W), walk)
+			for wx in range(0, int(WORLD_W), 90):
+				draw_line(Vector2(wx - _cam_x, sy), Vector2(wx + 44.0 - _cam_x, sy), Color("ffe08a", 0.7), 4.0)
 	_draw_road_band(-ROAD_HALF - WALK_W, ROAD_HALF + WALK_W, walk, h)
 	_draw_road_band(-ROAD_HALF, ROAD_HALF, road, h)
 	k = int(floor(_cam / 80.0))
 	while k * 80.0 - _cam < h:
 		var wy: float = k * 80.0
 		var sy: float = wy - _cam
-		var rc := _road_x(wy)
-		draw_line(Vector2(rc, sy), Vector2(_road_x(wy + 40.0), sy + 40.0), Color("ffe08a", 0.7), 4.0)
+		var rc := _road_x(wy) - _cam_x
+		draw_line(Vector2(rc, sy), Vector2(_road_x(wy + 40.0) - _cam_x, sy + 40.0), Color("ffe08a", 0.7), 4.0)
 		k += 1
 
 
 func _draw_landmarks(w: float, h: float) -> void:
 	var lake_y := LAKE_Y - _cam
+	var lake_x := WORLD_W - 230.0 - _cam_x
 	if lake_y > -300.0 and lake_y < h + 300.0:
-		_ellipse(Vector2(w - 72.0, lake_y), 178.0, 245.0, Color("b8d7b2").lerp(Color("314f55"), _dusk * 0.6))
-		_ellipse(Vector2(w - 64.0, lake_y), 157.0, 224.0, Color("4aa9c7").lerp(Color("25465d"), _dusk * 0.65))
+		_ellipse(Vector2(lake_x, lake_y), 178.0, 245.0, Color("b8d7b2").lerp(Color("314f55"), _dusk * 0.6))
+		_ellipse(Vector2(lake_x + 8.0, lake_y), 157.0, 224.0, Color("4aa9c7").lerp(Color("25465d"), _dusk * 0.65))
 		for i in 6:
 			var ripple_y := lake_y - 150.0 + i * 58.0
-			draw_arc(Vector2(w - 80.0 + sin(i * 1.7) * 45.0, ripple_y), 22.0 + i * 3.0,
+			draw_arc(Vector2(lake_x + sin(i * 1.7) * 45.0, ripple_y), 22.0 + i * 3.0,
 					0.15, PI - 0.15, 16, Color(0.8, 0.95, 1.0, 0.35), 2.0)
 		# Small neighborhood dock.
-		draw_rect(Rect2(w - 205.0, lake_y - 18.0, 118.0, 36.0), Color("8a6747"))
-		for x in range(int(w - 198.0), int(w - 92.0), 18):
+		draw_rect(Rect2(lake_x - 141.0, lake_y - 18.0, 118.0, 36.0), Color("8a6747"))
+		for x in range(int(lake_x - 134.0), int(lake_x - 28.0), 18):
 			draw_line(Vector2(x, lake_y - 16.0), Vector2(x, lake_y + 16.0), Color("b38a60"), 2.0)
 	var mountain_y := MOUNTAIN_Y - _cam
 	if mountain_y > -260.0 and mountain_y < h + 260.0:
 		var back := Color("75869b").lerp(Color("343a57"), _dusk * 0.65)
 		var front := Color("536b64").lerp(Color("27394a"), _dusk * 0.65)
 		for i in 6:
-			var base_x := -80.0 + i * 165.0
+			var base_x := -80.0 + i * 365.0 - _cam_x
 			var peak := Vector2(base_x + 85.0, mountain_y - 145.0 - (i % 3) * 32.0)
 			draw_colored_polygon(PackedVector2Array([
 					Vector2(base_x, mountain_y + 70.0), peak, Vector2(base_x + 190.0, mountain_y + 70.0)]), back)
@@ -361,7 +383,7 @@ func _draw_landmarks(w: float, h: float) -> void:
 					peak, peak + Vector2(-31.0, 52.0), peak + Vector2(4.0, 39.0), peak + Vector2(34.0, 58.0)]),
 					Color("e8eef2", 0.9))
 		for i in 5:
-			var base_x := -30.0 + i * 190.0
+			var base_x := -30.0 + i * 430.0 - _cam_x
 			draw_colored_polygon(PackedVector2Array([
 					Vector2(base_x, mountain_y + 95.0), Vector2(base_x + 95.0, mountain_y - 70.0),
 					Vector2(base_x + 210.0, mountain_y + 95.0)]), front)
@@ -394,11 +416,11 @@ func _draw_road_band(left: float, right: float, color: Color, h: float) -> void:
 	var step := 28.0
 	var sy := -step
 	while sy <= h + step:
-		points.append(Vector2(_road_x(_cam + sy) + left, sy))
+		points.append(Vector2(_road_x(_cam + sy) - _cam_x + left, sy))
 		sy += step
 	sy = h + step
 	while sy >= -step:
-		points.append(Vector2(_road_x(_cam + sy) + right, sy))
+		points.append(Vector2(_road_x(_cam + sy) - _cam_x + right, sy))
 		sy -= step
 	draw_colored_polygon(points, color)
 
@@ -411,7 +433,10 @@ func _draw_car(x: float, y: float, col: Color) -> void:
 
 
 func _yard_rect(i: int) -> Rect2:
-	var cx := _road_x(house_y(i))
+	if i >= 8:
+		var hc := _house_c(i) - Vector2(_cam_x, _cam)
+		return Rect2(hc.x - HOUSE_W * 0.65, hc.y - 104.0, HOUSE_W * 1.3, 208.0)
+	var cx := _road_x(house_y(i)) - _cam_x
 	var x0 := (cx + ROAD_HALF + WALK_W) if _side(i) > 0 else (cx - ROAD_HALF - WALK_W - YARD_GAP)
 	return Rect2(x0, house_y(i) - 100.0 - _cam, YARD_GAP, 200.0)
 
@@ -432,7 +457,7 @@ func _draw_yard(i: int) -> void:
 
 func _draw_house(i: int, sh: Vector2) -> void:
 	var hs: Dictionary = _houses[i]
-	var c := _house_c(i) - Vector2(0, _cam)
+	var c := _house_c(i) - Vector2(_cam_x, _cam)
 	var side := _side(i)
 	var rect := Rect2(c.x - HOUSE_W * 0.5, c.y - HOUSE_D * 0.5, HOUSE_W, HOUSE_D)
 	draw_rect(Rect2(rect.position + sh, rect.size), Color(0, 0, 0, 0.2))
@@ -501,7 +526,7 @@ func _draw_house(i: int, sh: Vector2) -> void:
 func _draw_highlight(i: int) -> void:
 	if i != _near:
 		return
-	var c := _house_c(i) - Vector2(0, _cam)
+	var c := _house_c(i) - Vector2(_cam_x, _cam)
 	var pulse := 0.5 + 0.5 * sin(_time * 6.0)
 	var rect := Rect2(c.x - HOUSE_W * 0.5, c.y - HOUSE_D * 0.5, HOUSE_W, HOUSE_D).grow(10.0 + pulse * 4.0)
 	var active: bool = _pins.get(i, "") in ["lawn", "card"]
@@ -515,7 +540,7 @@ func _draw_pin(i: int) -> void:
 		return
 	var kind: String = _pins[i]
 	var active := kind != "done"
-	var c := _house_c(i) - Vector2(0, _cam) + Vector2(0, -18.0 + (sin(_time * 3.0 + i) * 6.0 if active else 0.0))
+	var c := _house_c(i) - Vector2(_cam_x, _cam) + Vector2(0, -18.0 + (sin(_time * 3.0 + i) * 6.0 if active else 0.0))
 	var col := Color("3fae6a") if kind == "lawn" else (Color("e0533d") if kind == "card" else Color("9aa4b2"))
 	if active:
 		_ellipse(c, 44.0 + sin(_time * 4.0) * 5.0, 44.0 + sin(_time * 4.0) * 5.0, Color(col, 0.25))
@@ -629,7 +654,7 @@ func _draw_map(rect: Rect2) -> void:
 	var route := PackedVector2Array()
 	for i in 25:
 		var wy := WORLD_H * float(i) / 24.0
-		var nx := clampf((_road_x(wy) - size.x * 0.25) / (size.x * 0.5), 0.0, 1.0)
+		var nx := clampf(_road_x(wy) / WORLD_W, 0.0, 1.0)
 		var ny := 1.0 - wy / WORLD_H
 		route.append(inner.position + Vector2(nx * inner.size.x, ny * inner.size.y))
 	draw_polyline(route, Color("b7bec8"), 8.0, true)
@@ -639,12 +664,12 @@ func _draw_map(rect: Rect2) -> void:
 	for house in _pins:
 		var h := int(house)
 		var hp := _house_c(h)
-		var mx := inner.position.x + clampf((hp.x - size.x * 0.25) / (size.x * 0.5), 0.0, 1.0) * inner.size.x
+		var mx := inner.position.x + clampf(hp.x / WORLD_W, 0.0, 1.0) * inner.size.x
 		var my := inner.position.y + (1.0 - hp.y / WORLD_H) * inner.size.y
 		var kind: String = _pins[house]
 		var col := Color("7b8794") if kind == "done" else (Color("50c878") if kind == "lawn" else Color("ff6b5a"))
 		draw_circle(Vector2(mx, my), 6.0, col)
-	var px := inner.position.x + clampf((_player_x - size.x * 0.25) / (size.x * 0.5), 0.0, 1.0) * inner.size.x
+	var px := inner.position.x + clampf(_player_x / WORLD_W, 0.0, 1.0) * inner.size.x
 	var py := inner.position.y + (1.0 - _player_y / WORLD_H) * inner.size.y
 	draw_circle(Vector2(px, py), 7.0, Color("ffd36e"))
 	draw_circle(Vector2(px, py), 10.0, Color("ffd36e", 0.35), false, 2.0)

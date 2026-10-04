@@ -111,6 +111,8 @@ func _resume_run() -> void:
 		var h := int(house)
 		pins[h] = "done" if h in _completed else str(_complaints[house].get("kind", "card"))
 	var saved_position = world.get("player_position", Vector2(-1.0, float(world.get("player_y", -1.0))))
+	if int(world.get("world_version", 1)) < 2:
+		saved_position = Vector2(-1.0, saved_position.y)
 	_street.set_day(pins, _grass, _done, saved_position)
 	_update_task()
 	_refresh()
@@ -220,6 +222,7 @@ func _save_progress(show_feedback := false) -> void:
 	if not is_instance_valid(_street) or _complaints.is_empty() or _is_over:
 		return
 	GameState.save_run({
+		"world_version": 2,
 		"complaints": _complaints.duplicate(true),
 		"grass": _grass.duplicate(),
 		"completed": _completed.duplicate(),
@@ -314,6 +317,9 @@ func _build_ui() -> void:
 	meta.add_child(_save_label)
 	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 	_version_label = _make_label("v%s" % version, 18, Color("b9d8e8"), false)
+	_version_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_version_label.custom_minimum_size = Vector2(120, 0)
+	_version_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	meta.add_child(_version_label)
 
@@ -387,8 +393,11 @@ func _apply_safe_area() -> void:
 		top = maxf(float(safe.position.y) * k, 0.0)
 		bottom = maxf((win.y - float(safe.end.y)) * k, 0.0)
 	if OS.get_name() == "iOS":
-		top = maxf(top, 100.0)
-		bottom = maxf(bottom, 30.0)
+		# Modern iOS reports the safe area. Use a modest fallback only when it does not.
+		if top <= 0.0:
+			top = 36.0
+		if bottom <= 0.0:
+			bottom = 18.0
 	_margin.add_theme_constant_override("margin_top", 24 + int(top))
 	_margin.add_theme_constant_override("margin_bottom", 24 + int(bottom))
 
