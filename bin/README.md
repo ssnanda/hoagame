@@ -10,8 +10,10 @@ Build scripts for **HOA President** (`ssnanda/hoagame`, Godot 4 → iOS).
 | 2a | `2a-hoagame-ipa.sh` | optionally bump → export IPA → push → update AltStore source → publish an immutable versioned release | `~/Documents/GitHub/ipa/hoagame.ipa` |
 | 2b | `2b-sim-iphone.sh` | export Xcode project → build → install + launch in iPhone simulator | simulator app |
 
-2a and 2b are peers. On a clean tree, 2a builds the current version. With uncommitted
-changes or an explicit `--bump`, it runs step 1 first. 2b never bumps.
+2a and 2b are peers. Before building, 2a lists pending changes and runs step 1
+when any are present or an explicit `--bump` is supplied. It verifies all version
+files match and refuses to republish an existing version. On a clean tree, pass
+`--bump patch` for a new release. 2b never bumps.
 
 ## Usage
 

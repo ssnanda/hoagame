@@ -105,6 +105,36 @@ require_gh() {
 
 working_tree_dirty() { [[ -n "$(git -C "$ROOT_DIR" status --porcelain)" ]]; }
 
+show_pending_changes() {
+  local pending
+  pending="$(git -C "$ROOT_DIR" status --short)"
+  if [[ -n "$pending" ]]; then
+    echo "Git preflight: pending changes found"
+    echo "$pending"
+  else
+    echo "Git preflight: working tree clean"
+  fi
+}
+
+verify_version_files() {
+  local expected short build project_version preset_short preset_build
+  expected="$(get_version)"
+  short="${expected%+*}"
+  build="${expected#*+}"
+  project_version="$(sed -n 's/^config\/version="\([^"]*\)"/\1/p' "$ROOT_DIR/project.godot" | head -1)"
+  preset_short="$(sed -n 's/^application\/short_version="\([^"]*\)"/\1/p' "$ROOT_DIR/export_presets.cfg" | head -1)"
+  preset_build="$(sed -n 's/^application\/version="\([^"]*\)"/\1/p' "$ROOT_DIR/export_presets.cfg" | head -1)"
+  if [[ "$project_version" != "$short" || "$preset_short" != "$short" || "$preset_build" != "$build" ]]; then
+    echo "Error: version files disagree" >&2
+    echo "  VERSION: $expected" >&2
+    echo "  project.godot: ${project_version:-missing}" >&2
+    echo "  export preset: ${preset_short:-missing}+${preset_build:-missing}" >&2
+    echo "Run ./bin/1-bump-version.sh to synchronize them." >&2
+    exit 1
+  fi
+  echo "Version preflight: $expected (project and export preset match)"
+}
+
 git_sync_branch() {
   cd "$ROOT_DIR"
   local branch; branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -255,6 +285,12 @@ if [[ "$DELETE_ONLY" == "true" ]]; then delete_old_ipa; exit 0; fi
 
 require_files
 require_git
+show_pending_changes
+
+if [[ "$GITHUB_RELEASE" == "true" && "$GIT_COMMIT" != "true" ]]; then
+  echo "Error: publishing requires committed source; remove --no-git-commit or use --local." >&2
+  exit 1
+fi
 
 CURRENT_VERSION="$(get_version)"
 validate_version "$CURRENT_VERSION"
@@ -279,10 +315,28 @@ if [[ "$RUN_BUMP" == "true" ]]; then
   "$BIN_DIR/1-bump-version.sh" ${BUMP_ARGS[@]+"${BUMP_ARGS[@]}"}
 fi
 
+verify_version_files
+
+if [[ "$GIT_COMMIT" == "true" ]] && working_tree_dirty; then
+  echo "Error: pending changes remain after the version commit:" >&2
+  git -C "$ROOT_DIR" status --short >&2
+  exit 1
+fi
+
 VERSION="$(get_version)"
 validate_version "$VERSION"
 RELEASE_TAG="ios-${VERSION/+/-}"
 RELEASE_TITLE="$APP_NAME — iOS $VERSION"
+
+if [[ "$GITHUB_RELEASE" == "true" ]]; then
+  require_gh
+  if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1 || \
+      gh release view "$RELEASE_TAG" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
+    echo "Error: $VERSION is already published as $RELEASE_TAG." >&2
+    echo "Create a new version with --bump patch (or run 1-bump-version.sh first)." >&2
+    exit 1
+  fi
+fi
 
 if [[ "$GIT_PUSH" == "true" ]]; then
   git_sync_branch
