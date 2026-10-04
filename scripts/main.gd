@@ -1,51 +1,37 @@
 extends Control
-## HUD + day loop: walk the street, investigate complaint pins, keep score.
+## Orchestrator: HUD, day loop, panels and saving. The rules live in sim/hoa_sim.gd,
+## the neighborhood in world/*, and each screen in ui/*.
 
 const CARD_SCENE := preload("res://scenes/card.tscn")
 const STREET_SCRIPT := preload("res://scripts/street.gd")
 const LAWN_SCRIPT := preload("res://scripts/lawn_game.gd")
 const CASE_FILE_SCRIPT := preload("res://scripts/case_file.gd")
+const HoaSim := preload("res://scripts/sim/hoa_sim.gd")
+const Board := preload("res://scripts/sim/board.gd")
+const Residents := preload("res://scripts/sim/residents.gd")
+const UiKit := preload("res://scripts/ui/ui_kit.gd")
+const MenuPanels := preload("res://scripts/ui/menu_panels.gd")
+const PortalPanel := preload("res://scripts/ui/portal_panel.gd")
+const ReinspectPanel := preload("res://scripts/ui/reinspect_panel.gd")
+const HearingPanel := preload("res://scripts/ui/hearing_panel.gd")
+const VotePanel := preload("res://scripts/ui/vote_panel.gd")
+
 const CARD_SIZE := Vector2(600, 640)
-const BOARD_NAMES := ["Pat Whitmore", "Lorraine Cho", "Ben Aldridge", "Dana Ruiz", "Walt Pruitt"]
-const ANNUAL_MEETING_EVERY := 10
-const FAVORED := ["friend", "board_member"]
 const UPDATE_MANIFEST_URL := "https://raw.githubusercontent.com/ssnanda/hoagame/main/altstore.json"
 const ALTSTORE_BUNDLE_ID := "com.ssnanda.hoagame"
-const STAT_LABELS := {"budget": "BUDGET", "happiness": "HAPPY", "power": "POWER"}
-const RESIDENTS := [
-	"The Hendersons", "Gary & Pam", "Dave, Lot 27", "Linda", "Mr. Okafor", "The Pattersons",
-	"Priya & Arun", "The Garcias", "Martha, Lot 31", "Coach Williams", "The Chens", "Beth & Her Gnomes",
-]
-const VIOLATION_CATALOG := [
-	{"id": "tall_grass", "label": "Tall grass", "object": "weeds", "severity": 1},
-	{"id": "dead_lawn", "label": "Dead lawn", "object": "dead_lawn", "severity": 1},
-	{"id": "curb_bins", "label": "Bins left at curb", "object": "bins", "severity": 1},
-	{"id": "rv", "label": "RV over 72 hours", "object": "rv", "severity": 2},
-	{"id": "boat", "label": "Boat stored outside", "object": "boat", "severity": 2},
-	{"id": "commercial_vehicle", "label": "Commercial vehicle", "object": "van", "severity": 2},
-	{"id": "lawn_parking", "label": "Vehicle on lawn", "object": "car", "severity": 2},
-	{"id": "broken_vehicle", "label": "Inoperable vehicle", "object": "car", "severity": 2},
-	{"id": "shed", "label": "Unapproved shed", "object": "shed", "severity": 2},
-	{"id": "fence", "label": "Unapproved fence", "object": "fence", "severity": 1},
-	{"id": "hoop", "label": "Basketball hoop in street", "object": "hoop", "severity": 1},
-	{"id": "yard_sign", "label": "Unapproved yard sign", "object": "sign", "severity": 1},
-	{"id": "decorations", "label": "Expired decorations", "object": "decorations", "severity": 1},
-	{"id": "paint", "label": "Exterior color violation", "object": "paint", "severity": 1},
-	{"id": "siding", "label": "Damaged siding", "object": "damage", "severity": 2},
-	{"id": "shrubs", "label": "Overgrown shrubs", "object": "shrubs", "severity": 1},
-	{"id": "debris", "label": "Trash or construction debris", "object": "debris", "severity": 2},
-	{"id": "addition", "label": "Unapproved addition", "object": "addition", "severity": 3},
-	{"id": "short_rental", "label": "Short-term rental activity", "object": "rental", "severity": 2},
-	{"id": "dog_waste", "label": "Pet waste issue", "object": "dog", "severity": 1},
-	{"id": "noise", "label": "Noise complaint", "object": "noise", "severity": 1},
-]
+const WORLD_VERSION := 7
+const STAT_LABELS := {"budget": "TREASURY", "happiness": "COMMUNITY", "power": "AUTHORITY"}
+const DOLLARS_PER_POINT := 690
+
+var sim := HoaSim.new()
 
 var _bars: Dictionary = {}
+var _stat_labels: Dictionary = {}
 var _day_label: Label
 var _score_label: Label
 var _best_label: Label
 var _task_label: Label
-var _save_label: Label
+var _politics_label: Label
 var _version_label: Label
 var _street: Control
 var _margin: MarginContainer
@@ -53,40 +39,118 @@ var _overlay: ColorRect
 var _card: Panel
 var _over_panel: Control
 var _over_label: Label
+var _title: Control
+var _modal: Control
+var _menu_button: Button
 var _is_over := false
-var _complaints: Dictionary = {}
-var _grass: Array = []
 var _active := -1
-var _done := 0
-var _completed: Array = []
+var _grass: Array = []
+var _measurements: Dictionary = {}
 var _phase := "street"
 var _evening_bonus: Dictionary = {}
-var _evidence: Dictionary = {}
-var _properties: Dictionary = {}
-var _cases: Dictionary = {}
+var _events: Array = []
+var _morning_queue: Array = []
 var _update_request: HTTPRequest
 var _update_prompt: Control
 var _available_version := ""
 var _altstore_launch_pending := false
-var _politics: Dictionary = {}
-var _projects: Array = []
-var _events: Array = []
-var _politics_label: Label
 
 
 func _ready() -> void:
-	_politics = _create_politics()
 	_load_events()
 	_build_ui()
 	GameState.stats_changed.connect(_refresh)
 	GameState.game_over.connect(_on_game_over)
 	await get_tree().process_frame
-	if GameState.has_saved_run:
+	sim.setup(_street.house_count())
+	_show_title()
+	_check_for_updates()
+
+
+# ---------------------------------------------------------------- title and menus
+
+func _show_title() -> void:
+	_close_overlay()
+	if is_instance_valid(_title):
+		_title.queue_free()
+	_street.set_hint("")
+	_title = MenuPanels.title_screen(size, GameState.has_saved_run, {
+		"continue": func(): _begin(true),
+		"new_term": func(): _begin(false),
+		"howto": func(): _show_modal(MenuPanels.how_to_play(size, _close_modal)),
+		"settings": func(): _show_modal(MenuPanels.settings(size, _close_modal, _reset_game)),
+		"about": func(): _show_modal(MenuPanels.about(size, _close_modal)),
+	})
+	_title.z_index = 40
+	add_child(_title)
+
+
+func _begin(resume: bool) -> void:
+	if is_instance_valid(_title):
+		_title.queue_free()
+		_title = null
+	_is_over = false
+	_over_panel.hide()
+	if resume and GameState.has_saved_run:
 		_resume_run()
 	else:
 		_start()
-	_check_for_updates()
 
+
+func _show_modal(panel: Control) -> void:
+	_close_modal()
+	_modal = ColorRect.new()
+	(_modal as ColorRect).color = Color(0, 0, 0, 0.6)
+	_modal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_modal.z_index = 60
+	_modal.add_child(panel)
+	add_child(_modal)
+
+
+func _close_modal() -> void:
+	if is_instance_valid(_modal):
+		_modal.queue_free()
+	_modal = null
+
+
+func _reset_game() -> void:
+	_close_modal()
+	GameState.clear_run()
+	GameState.new_game()
+	_show_title()
+
+
+func _open_menu() -> void:
+	var modal := UiKit.modal(size, Vector2(560, 640), "MENU")
+	for item in [["RESUME", func(): _close_modal()], ["WOZIG PORTAL", func(): _open_portal()],
+			["HOW TO PLAY", func(): _show_modal(MenuPanels.how_to_play(size, _close_modal))],
+			["SETTINGS", func(): _show_modal(MenuPanels.settings(size, _close_modal, _reset_game))],
+			["TITLE SCREEN", func():
+				_close_modal()
+				_save_progress()
+				_show_title()]]:
+		var btn := UiKit.button(str(item[0]), 28, 72)
+		btn.pressed.connect(func():
+			Sfx.play("tap")
+			(item[1] as Callable).call())
+		modal.body.add_child(btn)
+	if OS.is_debug_build():
+		var debug_button := UiKit.button("DEBUG VIEW: %s" % ("ON" if _street.debug_view else "OFF"), 22, 60)
+		debug_button.pressed.connect(func():
+			_street.debug_view = not _street.debug_view
+			_close_modal())
+		modal.body.add_child(debug_button)
+	_show_modal(modal.root)
+
+
+func _open_portal() -> void:
+	var portal: Panel = PortalPanel.new()
+	portal.setup(sim, _street)
+	portal.closed.connect(_close_modal)
+	_show_modal(portal)
+
+
+# ---------------------------------------------------------------- update check
 
 func _check_for_updates() -> void:
 	_update_request = HTTPRequest.new()
@@ -94,13 +158,11 @@ func _check_for_updates() -> void:
 	add_child(_update_request)
 	_update_request.request_completed.connect(_on_update_check_completed)
 	var headers := PackedStringArray(["Cache-Control: no-cache", "Accept: application/json"])
-	var error := _update_request.request(UPDATE_MANIFEST_URL, headers)
-	if error != OK:
+	if _update_request.request(UPDATE_MANIFEST_URL, headers) != OK:
 		_update_request.queue_free()
 
 
-func _on_update_check_completed(result: int, response_code: int,
-		headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_update_check_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if is_instance_valid(_update_request):
 		_update_request.queue_free()
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
@@ -111,8 +173,7 @@ func _on_update_check_completed(result: int, response_code: int,
 	for app in source.get("apps", []):
 		if app is Dictionary and str(app.get("bundleIdentifier", "")) == ALTSTORE_BUNDLE_ID:
 			var remote_version := str(app.get("version", ""))
-			if _is_newer_version(remote_version,
-					str(ProjectSettings.get_setting("application/config/version", "0.0.0"))):
+			if _is_newer_version(remote_version, str(ProjectSettings.get_setting("application/config/version", "0.0.0"))):
 				_available_version = remote_version
 				_show_update_prompt(str(app.get("versionDescription", "")))
 			return
@@ -135,66 +196,39 @@ func _show_update_prompt(description: String) -> void:
 	_update_prompt = ColorRect.new()
 	(_update_prompt as ColorRect).color = Color(0, 0, 0, 0.76)
 	_update_prompt.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_update_prompt.z_index = 50
+	_update_prompt.z_index = 70
 	add_child(_update_prompt)
-	var panel := Panel.new()
-	panel.add_theme_stylebox_override("panel", _card_style())
-	panel.size = Vector2(600, 490)
-	panel.position = (size - panel.size) / 2.0
-	_update_prompt.add_child(panel)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 18)
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 32.0
-	box.offset_right = -32.0
-	box.offset_top = 32.0
-	box.offset_bottom = -32.0
-	panel.add_child(box)
-	box.add_child(_make_label("UPDATE AVAILABLE", 38, Color("1c1b1f"), true))
-	box.add_child(_make_label("HOA President %s" % _available_version, 30, Color("2f4858"), true))
+	var modal := UiKit.modal(size, Vector2(600, 520), "UPDATE AVAILABLE")
+	_update_prompt.add_child(modal.root)
+	modal.body.add_child(UiKit.label("HOA President %s" % _available_version, 30, UiKit.ACCENT, true))
 	if not description.is_empty():
-		box.add_child(_make_label(description, 22, Color("4d5660"), true))
-	box.add_child(_make_label("AltStore will open. Choose Update in My Apps and keep AltServer running on your computer.",
-			20, Color("4d5660"), true))
-	var update_button := Button.new()
-	update_button.text = "OPEN ALTSTORE"
-	update_button.custom_minimum_size = Vector2(0, 76)
-	update_button.add_theme_font_size_override("font_size", 28)
+		modal.body.add_child(UiKit.label(description, 22, UiKit.MUTED, true))
+	modal.body.add_child(UiKit.label("AltStore will open. Choose Update in My Apps and keep AltServer running on your computer.", 20, UiKit.MUTED, true))
+	var update_button := UiKit.button("OPEN ALTSTORE", 28, 76)
 	update_button.pressed.connect(_open_altstore_update)
-	box.add_child(update_button)
-	var later_button := Button.new()
-	later_button.text = "LATER"
-	later_button.custom_minimum_size = Vector2(0, 62)
-	later_button.add_theme_font_size_override("font_size", 24)
-	later_button.pressed.connect(_dismiss_update_prompt)
-	box.add_child(later_button)
+	modal.footer.add_child(update_button)
+	var later := UiKit.button("LATER", 24, 62)
+	later.pressed.connect(func():
+		_update_prompt.queue_free()
+		_update_prompt = null)
+	modal.footer.add_child(later)
 
 
 func _open_altstore_update() -> void:
-	# Start with the original app scheme. If it does not background this app, try
-	# the newer AltStore Classic scheme after a short delay. The export preset
-	# allowlists both schemes for iOS canOpenURL checks.
+	# Original scheme first; try AltStore Classic if this app is not backgrounded quickly.
 	_altstore_launch_pending = true
 	OS.shell_open("altstore://")
-	var fallback := get_tree().create_timer(0.65)
-	fallback.timeout.connect(func():
+	get_tree().create_timer(0.65).timeout.connect(func():
 		if _altstore_launch_pending:
 			_altstore_launch_pending = false
-			OS.shell_open("altstore-classic://")
-	, CONNECT_ONE_SHOT)
-
-
-func _dismiss_update_prompt() -> void:
-	if is_instance_valid(_update_prompt):
-		_update_prompt.queue_free()
-	_update_prompt = null
+			OS.shell_open("altstore-classic://"), CONNECT_ONE_SHOT)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		_altstore_launch_pending = false
-	if what == NOTIFICATION_APPLICATION_PAUSED and is_instance_valid(_street) and not _is_over:
-		_save_progress()
+		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty():
+			_save_progress()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -206,132 +240,392 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_card.fling("right")
 
 
-func _load_events() -> void:
-	var file := FileAccess.open("res://data/events.json", FileAccess.READ)
-	if file == null:
-		return
-	var parsed = JSON.parse_string(file.get_as_text())
-	if parsed is Array:
-		_events = parsed
-
+# ---------------------------------------------------------------- run lifecycle
 
 func _start() -> void:
-	_politics = _create_politics()
-	_projects = []
 	_is_over = false
 	_over_panel.hide()
 	_close_overlay()
 	GameState.clear_run()
 	GameState.new_game()
-	_properties = _create_properties()
-	_cases = {}
+	sim.new_term()
+	_measurements = {}
 	_new_day()
 
 
+func _load_events() -> void:
+	_events.clear()
+	for path in ["res://data/events.json", "res://data/cards.json"]:
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var parsed = JSON.parse_string(file.get_as_text())
+		if parsed is Array:
+			_events.append_array(parsed)
+
+
 func _new_day() -> void:
-	var season := GameState.season()
-	var count := mini(4 + (GameState.day - 1) / 3, 8) + (1 if GameState.is_weekend() else 0)
-	var houses: Array = range(STREET_SCRIPT.HOUSE_COUNT)
-	# Repeat offenders and low-compliance homes are more likely to draw complaints.
-	var order := {}
-	for h in houses:
-		var property: Dictionary = _properties.get(h, {})
-		order[h] = randf() - 0.15 * int(property.get("repeat_count", 0)) - (0.2 if int(property.get("compliance", 60)) < 40 else 0.0)
-	houses.sort_custom(func(a, b): return order[a] < order[b])
-	var report: Array = []
-	report.append_array(_process_open_cases())
-	report.append_array(_process_projects())
-	report.append_array(_process_politics())
-	if GameState.day > 1 and GameState.day % ANNUAL_MEETING_EVERY == 0:
-		report.append_array(_annual_meeting())
+	var info := sim.start_day(GameState.day, GameState.season(), GameState.weekday())
 	if _is_over:
 		return
-	_complaints = {}
-	_grass = []
-	_completed = []
-	_phase = "street"
-	_evening_bonus = {}
-	_evidence = {}
+	var season := GameState.season()
 	var growth: float = [1.0, 1.15, 0.9, 0.7][season]
-	for i in STREET_SCRIPT.HOUSE_COUNT:
+	_grass = []
+	for i in _street.house_count():
 		_grass.append(randf_range(2.5, 4.5) * growth)
+	_measurements = {}
 	var pins := {}
 	var visuals := {}
-	for n in count:
-		var h: int = houses[n]
-		var allegations := _make_violations(h)
-		var first: Dictionary = allegations[0]
-		if first.id in ["tall_grass", "dead_lawn"]:
-			if bool(first.actual):
-				_grass[h] = randf_range(6.1, 6.9) if bool(first.borderline) else randf_range(6.8, 10.0)
-			else:
-				_grass[h] = randf_range(3.5, 5.4)
-			_complaints[h] = {"kind": "lawn", "violations": allegations,
-					"false_complaint": not bool(first.actual), "status": "assigned"}
-		else:
-			var false_complaint := allegations.all(func(v): return not bool(v.actual))
-			_complaints[h] = {"kind": "card", "card": GameState.next_card(),
-					"violations": allegations, "false_complaint": false_complaint, "status": "assigned"}
-		pins[h] = _complaints[h].kind
-		visuals[h] = allegations
-	_done = 0
+	for house in sim.assignments:
+		var h := int(house)
+		var a: Dictionary = sim.assignments[house]
+		pins[h] = str(a.kind)
+		visuals[h] = a.violations
+		for v in a.violations:
+			if str(v.id) == "tall_grass":
+				_grass[h] = (randf_range(6.1, 6.4) if bool(v.borderline) else randf_range(6.8, 10.0)) if bool(v.actual) else randf_range(3.5, 5.4)
+	for house in sim.discoverable:
+		visuals[int(house)] = sim.discoverable[house]
+	_phase = "street"
+	_evening_bonus = {}
 	_street.set_day(pins, _grass, 0, null, {}, visuals)
+	_street.set_discoverable(sim.discoverable.keys())
+	_street.set_case_states(sim.case_states())
 	_update_task()
-	_float("DAY %d" % GameState.day, Color("ffd36e"))
 	_refresh()
 	_save_progress()
-	if report.is_empty():
-		_maybe_event()
-	else:
-		_show_report("MORNING REPORT · DAY %d" % GameState.day, report, "START DAY", _maybe_event)
+	_morning_queue.clear()
+	if not (info.report as Array).is_empty():
+		Sfx.play("notify")
+		_morning_queue.append(func(): _show_report("MORNING REPORT · DAY %d" % GameState.day, info.report, "CONTINUE"))
+	for house in info.hearings:
+		_morning_queue.append(_run_hearing.bind(int(house)))
+	if not (info.meeting as Array).is_empty():
+		_morning_queue.append(_run_meeting.bind(info.meeting))
+	_morning_queue.append(_maybe_event)
+	_next_morning_step()
 
 
-## Generic scrolling notice panel (morning report, annual meeting, ...).
-func _show_report(title: String, lines: Array, button_text: String, on_close: Callable) -> void:
+func _next_morning_step() -> void:
+	if _is_over or _morning_queue.is_empty():
+		return
+	var step: Callable = _morning_queue.pop_front()
+	step.call()
+
+
+func _resume_run() -> void:
+	var world := GameState.saved_world()
+	if not world.has("complaints") or not world.has("grass"):
+		_start()
+		return
+	sim.load_world(world)
+	if int(world.get("world_version", 1)) < 6:
+		# Neighborhood rebuilt in world version 6: keep the term, drop lot-specific state.
+		sim.properties = sim.residents.create(_street.house_count())
+		sim.cases = {}
+		_new_day()
+		return
+	_grass = (world.get("grass", []) as Array).duplicate()
+	while _grass.size() < _street.house_count():
+		_grass.append(randf_range(2.5, 4.5))
+	_phase = str(world.get("phase", "street"))
+	_evening_bonus = (world.get("evening_bonus", {}) as Dictionary).duplicate(true)
+	_measurements = (world.get("measurements", {}) as Dictionary).duplicate(true)
+	var pins := {}
+	var visuals := {}
+	for house in sim.assignments:
+		var h := int(house)
+		var a: Dictionary = sim.assignments[house]
+		if not a.has("text"):
+			a.text = str((a.get("card", {}) as Dictionary).get("text", "A complaint was filed."))
+			sim.assignments[house] = a
+		pins[h] = "done" if h in sim.completed else str(a.get("kind", "card"))
+		visuals[h] = a.get("violations", [])
+	for house in sim.discoverable:
+		visuals[int(house)] = sim.discoverable[house]
+	var saved_position = world.get("player_position", null)
+	_street.set_day(pins, _grass, sim.completed.size(), saved_position, world.get("evidence", {}), visuals)
+	_street.set_discoverable(sim.discoverable.keys())
+	_street.set_case_states(sim.case_states())
+	_street.set_cart_state(world.get("cart", {}))
+	_update_task()
+	_refresh()
+	_float("WELCOME BACK", Color("ffd36e"))
+	if _phase == "evening":
+		_show_evening(GameState.day, _evening_bonus)
+
+
+func _update_task() -> void:
+	var left := sim.assignments.size() - sim.completed.size()
+	_task_label.text = "%d assignment%s remaining" % [left, "" if left == 1 else "s"]
+
+
+func _save_progress(show_feedback := false) -> void:
+	if not is_instance_valid(_street) or sim.assignments.is_empty() or _is_over:
+		return
+	var world := {
+		"world_version": WORLD_VERSION,
+		"grass": _grass.duplicate(),
+		"phase": _phase,
+		"evening_bonus": _evening_bonus.duplicate(true),
+		"evidence": _street.get_evidence(),
+		"measurements": _measurements.duplicate(true),
+		"player_position": _street.get_player_position(),
+		"cart": _street.get_cart_state(),
+	}
+	sim.save_into(world)
+	GameState.save_run(world)
+	if show_feedback:
+		_float_small("SAVED")
+
+
+# ---------------------------------------------------------------- inspecting
+
+func _on_visit(house: int) -> void:
+	if _is_over or not sim.assignments.has(house) or _overlay.visible or house in sim.completed:
+		return
+	_active = house
+	Sfx.play("tap")
+	Settings.haptic(15)
+	var a: Dictionary = sim.assignments[house]
 	_overlay.show()
-	var panel := Panel.new()
-	panel.add_theme_stylebox_override("panel", _card_style())
-	panel.size = Vector2(620, 860)
-	panel.position = (size - panel.size) / 2.0
+	if str(a.kind) == "reinspect":
+		var record: Dictionary = sim.cases.get(house, {})
+		var panel: Panel = ReinspectPanel.new()
+		var labels: Array = []
+		for v in record.get("violations", []):
+			if str(v.id) in record.get("cited", []):
+				labels.append(str(v.label))
+		panel.setup({"address": _street.lot_address(house), "owner": sim.owner_of(house), "relationship": sim.relationship_text(house),
+				"result": str(a.get("result", "unchanged")), "labels": labels, "options": sim.reinspection_options(house)})
+		panel.chose.connect(_on_reinspection_choice)
+		_overlay.add_child(panel)
+	elif str(a.kind) == "lawn" and not _measurements.has(house):
+		var game = LAWN_SCRIPT.new()
+		game.setup(_grass[house], sim.owner_of(house))
+		game.measured.connect(_on_lawn_measured)
+		_overlay.add_child(game)
+		game.position = ((size - Vector2(620, 880)) / 2.0).max(Vector2(20, 20))
+	else:
+		_open_case_sheet(house)
+
+
+func _on_lawn_measured(reading: float, precise: bool) -> void:
+	_measurements[_active] = {"reading": reading, "precise": precise}
+	_close_overlay()
+	_overlay.show()
+	_open_case_sheet(_active)
+
+
+## Evidence as the rules see it: photos, plus a precise lawn measurement for tall grass.
+func _evidence_for(house: int) -> Dictionary:
+	var evidence: Dictionary = (_street.get_evidence().get(house, {}) as Dictionary).duplicate(true)
+	var measured: Dictionary = _measurements.get(house, {})
+	# A precise reading over the limit documents the violation; under it, it clears it.
+	if bool(measured.get("precise", false)) and float(measured.get("reading", 0.0)) > 6.0:
+		var documented: Array = evidence.get("documented", [])
+		if not "tall_grass" in documented:
+			documented.append("tall_grass")
+		evidence.documented = documented
+		evidence.quality = maxi(int(evidence.get("quality", 0)), 60)
+	return evidence
+
+
+func _open_case_sheet(house: int) -> void:
+	var a: Dictionary = sim.assignments[house]
+	var property: Dictionary = sim.property_of(house)
+	var evidence := _evidence_for(house)
+	var documented: Array = evidence.get("documented", [])
+	var quality := int(evidence.get("quality", 0))
+	var rows: Array = []
+	var notes: Array = []
+	for v in a.violations:
+		var seen := str(v.id) in documented
+		# A strong photo that shows nothing counts as evidence the complaint is wrong.
+		var cleared: bool = quality >= 55 and not bool(v.actual) and (evidence.get("photos", []) as Array).size() > 0
+		var reading: Dictionary = _measurements.get(house, {})
+		if str(v.id) == "tall_grass" and bool(reading.get("precise", false)) and float(reading.get("reading", 99.0)) <= 6.0:
+			cleared = true
+		rows.append({"id": v.id, "label": v.label, "documented": seen, "cleared": cleared})
+		if seen:
+			notes.append("%s: %s" % [str(v.label), str(v.borderline_note) if bool(v.borderline) and str(v.borderline_note) != "" else "clearly visible in the photo."])
+		elif cleared:
+			notes.append("%s: not visible. %s" % [str(v.label), str(v.hint)])
+	var measured: Dictionary = _measurements.get(house, {})
+	if not measured.is_empty():
+		notes.append("Lawn measured at %.1f in (limit 6.0)%s." % [float(measured.reading), " — over the limit" if float(measured.reading) > 6.0 else " — compliant"])
+	var history: Array = []
+	var past: Array = property.get("history", [])
+	for entry in past.slice(maxi(0, past.size() - 3)):
+		history.append("Day %d · %s" % [int(entry.get("day", 0)), str(entry.get("state", "")).replace("_", " ")])
+	var photos: Array = []
+	var shots: Array = (evidence.get("photos", []) as Array).duplicate()
+	shots.sort_custom(func(x, y): return int(x.quality) > int(y.quality))
+	for shot in shots.slice(0, 3):
+		var tex: Texture2D = _street.camera_ev.thumb(str(shot.get("path", "")))
+		if tex != null:
+			photos.append(tex)
+	var traits: Array = property.get("traits", [])
+	var blurb: String = str(Residents.TRAIT_BLURBS.get(traits[0], "")) if not traits.is_empty() else ""
+	var source := str(a.get("source", "resident"))
+	var case_file = CASE_FILE_SCRIPT.new()
+	case_file.setup({
+		"address": _street.lot_address(house), "owner": sim.owner_of(house), "relationship": sim.relationship_text(house),
+		"repeat_count": property.get("repeat_count", 0), "lot_type": _street.lot_kind(house), "blurb": blurb, "history": history,
+		"source": str(a.get("complainant", sim.violations.source_label(source))), "text": str(a.get("text", "")),
+		"reliability": "Source reliability: %s" % _reliability_word(sim.violations.source_reliability(source)),
+		"photos": photos, "quality": quality, "shots": (evidence.get("photos", []) as Array).size(), "observations": notes,
+		"violations": rows, "options_for": func(cited: Array) -> Dictionary: return sim.ruling_options(house, cited, evidence),
+	})
+	case_file.ruled.connect(_on_case_ruled)
+	_overlay.add_child(case_file)
+	case_file.position = ((size - CASE_FILE_SCRIPT.PANEL_SIZE) / 2.0).max(Vector2(8, 8))
+
+
+func _reliability_word(value: float) -> String:
+	if value >= 0.85:
+		return "high"
+	if value >= 0.65:
+		return "moderate"
+	return "low"
+
+
+func _on_case_ruled(action: String, cited: Array) -> void:
+	var house := _active
+	var result := sim.rule_case(house, action, cited, _evidence_for(house))
+	_apply_result(result)
+	_finish_case(house)
+
+
+func _on_reinspection_choice(choice: String) -> void:
+	var house := _active
+	var result := sim.resolve_reinspection(house, choice)
+	result.correct = true
+	_apply_result(result)
+	_finish_case(house)
+
+
+func _apply_result(result: Dictionary) -> void:
+	var correct = result.get("correct", null)
+	var gained := GameState.add_score(int(result.points), correct)
+	GameState.apply_effects(result.effects)
+	_close_overlay()
+	if _is_over:
+		return
+	_float("%+d" % gained, Color("7ee081") if gained >= 0 else Color("ff6b5a"))
+	Sfx.play("good" if gained >= 0 else "bad")
+	Settings.haptic(30 if gained >= 0 else 45)
+
+
+func _finish_case(house: int) -> void:
+	if _is_over:
+		return
+	_street.mark_done(house)
+	_street.set_case_states(sim.case_states())
+	_update_task()
+	_refresh()
+	if sim.completed.size() >= sim.assignments.size():
+		_evening()
+	else:
+		_save_progress(true)
+
+
+func _on_discover(house: int) -> void:
+	if _overlay.visible or _is_over:
+		return
+	var info := sim.open_discovered(house)
+	if info.is_empty():
+		return
+	_street.add_assignment(house, "card")
+	_street.set_discoverable(sim.discoverable.keys())
+	for line in info.lines:
+		_float_small(str(line))
+	_update_task()
+	Sfx.play("notify")
+	_save_progress()
+
+
+func _on_photo(_house: int, quality: int, usable: bool, documented: Array) -> void:
+	if not usable:
+		GameState.add_score(-10)
+		Sfx.play("bad")
+		return
+	Sfx.play("shutter")
+	Settings.haptic(25)
+	GameState.add_score(10 + 15 * documented.size() + (10 if quality >= 80 else 0))
+	_save_progress(true)
+
+
+# ---------------------------------------------------------------- hearings, meetings, events
+
+func _run_hearing(house: int) -> void:
+	if _is_over:
+		return
+	var info := sim.build_hearing(house)
+	info.address = _street.lot_address(house)
+	_overlay.show()
+	var panel: Panel = HearingPanel.new()
+	panel.setup(info)
+	panel.decided.connect(func(recommendation: String, present: bool):
+		_close_overlay()
+		var result := sim.hold_hearing(house, recommendation, present)
+		GameState.apply_effects(result.effects)
+		GameState.add_score(40)
+		_street.set_case_states(sim.case_states())
+		var votes_panel: Panel = VotePanel.new()
+		votes_panel.setup("HEARING · %s" % _street.lot_address(house), result.lines, result.votes)
+		votes_panel.closed.connect(func():
+			_close_overlay()
+			_next_morning_step())
+		_overlay.show()
+		_overlay.add_child(votes_panel))
 	_overlay.add_child(panel)
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 28.0
-	box.offset_right = -28.0
-	box.offset_top = 28.0
-	box.offset_bottom = -28.0
-	box.add_theme_constant_override("separation", 14)
-	panel.add_child(box)
-	box.add_child(_make_label(title, 30, Color("1c1b1f"), true))
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 10)
-	scroll.add_child(list)
+
+
+func _run_meeting(votes: Array) -> void:
+	var retain := sim.board.tally(votes)
+	var lines: Array = ["%d of %d members vote to retain you." % [retain, votes.size()]]
+	var ousted := retain * 2 <= votes.size()
+	if ousted:
+		lines.append("You have been voted out.")
+	else:
+		var bonus := GameState.add_score(150)
+		sim.board.shift(sim.politics, 4)
+		lines.append("Re-elected! +%d points." % bonus)
+	_overlay.show()
+	var panel: Panel = VotePanel.new()
+	panel.setup("ANNUAL MEETING", lines, votes, "CONTINUE")
+	panel.closed.connect(func():
+		_close_overlay()
+		if ousted:
+			GameState.force_end("Voted out at the annual meeting. Recount denied.")
+		else:
+			_next_morning_step())
+	_overlay.add_child(panel)
+
+
+func _show_report(title: String, lines: Array, button_text: String) -> void:
+	_overlay.show()
+	var modal := UiKit.modal(size, Vector2(620, 860), title)
+	_overlay.add_child(modal.root)
 	for line in lines:
-		list.add_child(_make_label("• %s" % str(line), 22, Color("1c1b1f")))
-	var btn := Button.new()
-	btn.text = button_text
-	btn.custom_minimum_size = Vector2(0, 84)
-	btn.add_theme_font_size_override("font_size", 32)
+		modal.body.add_child(UiKit.label("• %s" % str(line), 22, UiKit.INK))
+	var btn := UiKit.button(button_text, 32, 84)
 	btn.pressed.connect(func():
 		_close_overlay()
-		on_close.call())
-	box.add_child(btn)
+		_next_morning_step())
+	modal.footer.add_child(btn)
 
 
-## One agenda item (architectural request, assessment, vendor bid, project, politics).
+## One agenda item (architectural request, assessment, vendor bid, project, politics, drama).
 func _maybe_event() -> void:
-	if _is_over or GameState.day <= 1 or _events.is_empty() or randf() > 0.55 or _overlay.visible:
+	if _is_over or GameState.day <= 1 or _events.is_empty() or randf() > 0.5 or _overlay.visible:
 		return
-	if GameState.day % ANNUAL_MEETING_EVERY == 0:
+	if GameState.day % HoaSim.ANNUAL_MEETING_EVERY == 0:
 		return
-	var event: Dictionary = _events[randi() % _events.size()].duplicate(true)
-	var house := randi() % STREET_SCRIPT.HOUSE_COUNT
-	event.who = str(event.who).replace("{owner}", _property_owner(house)).replace("{address}", _property_address(house))
+	var event: Dictionary = (_events[randi() % _events.size()] as Dictionary).duplicate(true)
+	var house: int = randi() % _street.house_count()
+	event.who = str(event.who).replace("{owner}", sim.owner_of(house)).replace("{address}", _street.lot_address(house))
 	_overlay.show()
 	_card = CARD_SCENE.instantiate()
 	_card.size = CARD_SIZE
@@ -346,604 +640,52 @@ func _on_event_swiped(side: String) -> void:
 	_card = null
 	var choice: Dictionary = data.get(side, {})
 	var effects: Dictionary = choice.get("effects", {})
-	_apply_political(effects)
+	sim.apply_political(effects)
 	if choice.has("project"):
-		_projects.append((choice.project as Dictionary).duplicate(true))
+		sim.projects.append((choice.project as Dictionary).duplicate(true))
 	GameState.add_score(25)
 	GameState.apply_effects(effects)
 	_close_overlay()
 	_save_progress(true)
-
-
-func _resume_run() -> void:
-	var world := GameState.saved_world()
-	if not world.has("complaints") or not world.has("grass"):
-		_start()
-		return
-	_complaints = world.get("complaints", {}).duplicate(true)
-	_grass = world.get("grass", []).duplicate(true)
-	# Older runs had fewer lots. Fill only the new lots so existing lawn values and
-	# completed cases remain intact when the denser neighborhood is introduced.
-	while _grass.size() < STREET_SCRIPT.HOUSE_COUNT:
-		_grass.append(randf_range(2.5, 4.5))
-	_completed = world.get("completed", []).duplicate()
-	_done = _completed.size()
-	_phase = str(world.get("phase", "street"))
-	_evening_bonus = world.get("evening_bonus", {}).duplicate(true)
-	_evidence = world.get("evidence", {}).duplicate(true)
-	_properties = world.get("properties", _create_properties()).duplicate(true)
-	_cases = world.get("cases", {}).duplicate(true)
-	_politics = world.get("politics", _create_politics()).duplicate(true)
-	_projects = world.get("projects", []).duplicate(true)
-	var fresh := _create_properties()
-	for h in fresh:
-		if not _properties.has(h):
-			_properties[h] = fresh[h]
-	var pins := {}
-	var visuals := {}
-	for house in _complaints:
-		var h := int(house)
-		pins[h] = "done" if h in _completed else str(_complaints[house].get("kind", "card"))
-		visuals[h] = _complaints[house].get("violations", [])
-	var saved_position = world.get("player_position", Vector2(-1.0, float(world.get("player_y", -1.0))))
-	if int(world.get("world_version", 1)) < 2:
-		saved_position = Vector2(-1.0, saved_position.y)
-	_street.set_day(pins, _grass, _done, saved_position, _evidence, visuals)
-	_update_task()
-	_refresh()
-	_float("WELCOME BACK", Color("ffd36e"))
-	if _phase == "evening":
-		_show_evening(GameState.day, _evening_bonus)
-
-
-func _update_task() -> void:
-	var left := _complaints.size() - _done
-	_task_label.text = "%d inspections remaining" % left
-
-
-func _on_visit(house: int) -> void:
-	if _is_over or not _complaints.has(house) or _overlay.visible:
-		return
-	_active = house
-	var comp: Dictionary = _complaints[house]
-	_overlay.show()
-	if comp.kind == "lawn":
-		var game = LAWN_SCRIPT.new()
-		game.setup(_grass[house], _resident_name(house))
-		game.done.connect(_on_lawn_done)
-		_overlay.add_child(game)
-		game.position = ((size - Vector2(620, 880)) / 2.0).max(Vector2(20, 20))
-	else:
-		var property: Dictionary = _properties.get(house, {})
-		var evidence: Dictionary = _street.get_evidence().get(house, {})
-		var case_file = CASE_FILE_SCRIPT.new()
-		case_file.setup({
-			"address": _property_address(house),
-			"owner": _property_owner(house),
-			"relationship": property.get("relationship", "neutral"),
-			"repeat_count": property.get("repeat_count", 0),
-			"lot_type": property.get("lot_type", "standard"),
-			"text": "%s: %s" % [str(comp.card.get("who", "Anonymous")), str(comp.card.get("text", ""))],
-			"violations": comp.get("violations", []),
-			"quality": evidence.get("quality", 0),
-			"shots": evidence.get("shots", 0),
-			"documented": evidence.get("documented", []),
-			"history": property.get("history", []),
-		})
-		case_file.ruled.connect(_on_case_ruled)
-		_overlay.add_child(case_file)
-		case_file.position = ((size - CASE_FILE_SCRIPT.PANEL_SIZE) / 2.0).max(Vector2(20, 20))
-
-
-func _on_photo(_house: int, quality: int, usable: bool, documented: Array) -> void:
-	if not usable:
-		GameState.add_score(-10)
-		return
-	GameState.add_score(10 + 15 * documented.size() + (10 if quality >= 80 else 0))
-	_save_progress(true)
-
-
-func _resident_name(house: int) -> String:
-	if _properties.has(house):
-		return _property_owner(house)
-	if house < RESIDENTS.size():
-		return RESIDENTS[house]
-	return ["The Parkers", "The Robinsons", "The Patels", "The Wilsons",
-			"The Nguyens", "The Millers"][house % 6]
-
-
-func _create_properties() -> Dictionary:
-	var result := {}
-	var first_names := ["Avery", "Jordan", "Maya", "Noah", "Priya", "Mateo", "Nora", "Theo",
-			"Lena", "Malik", "Sofia", "Eli", "June", "Arun", "Rosa", "Caleb"]
-	var last_names := ["Parker", "Nguyen", "Patel", "Robinson", "Garcia", "Wilson", "Okafor",
-			"Chen", "Miller", "Henderson", "Johnson", "Brown", "Davis", "Martinez"]
-	for house in STREET_SCRIPT.HOUSE_COUNT:
-		var owner := "%s %s" % [first_names[house % first_names.size()],
-				last_names[(house * 7 + 3) % last_names.size()]]
-		result[house] = {
-			"owner": owner,
-			"address": "%d %s" % [101 + house * 2, "COURT" if house >= STREET_SCRIPT.MAIN_HOUSE_COUNT else "HOA WAY"],
-			"lot_type": "cul_de_sac" if house >= STREET_SCRIPT.MAIN_HOUSE_COUNT and house % 8 in [0, 1, 6, 7] else ("corner" if house % 11 == 0 else "standard"),
-			"relationship": ["neutral", "friend", "critic", "board_member", "legal_threat"][house % 5],
-			"repeat_count": 0,
-			"history": [],
-			"compliance": 55 + (house * 17) % 41,
-		}
-	return result
-
-
-func _property_owner(house: int) -> String:
-	return str(_properties.get(house, {}).get("owner", _resident_name_fallback(house)))
-
-
-func _resident_name_fallback(house: int) -> String:
-	if house < RESIDENTS.size():
-		return RESIDENTS[house]
-	return ["The Parkers", "The Robinsons", "The Patels", "The Wilsons",
-			"The Nguyens", "The Millers"][house % 6]
-
-
-func _property_address(house: int) -> String:
-	return str(_properties.get(house, {}).get("address", "Lot %d" % (house + 1)))
-
-
-func _make_violations(_house: int) -> Array:
-	var season := GameState.season()
-	var pool: Array = []
-	for item in VIOLATION_CATALOG:
-		var id := str(item.id)
-		if season == 3 and id == "tall_grass":
-			continue
-		pool.append(item.duplicate(true))
-		var boosted := (season == 1 and id in ["tall_grass", "hoop", "short_rental"]) \
-				or (season >= 2 and id == "decorations") \
-				or (GameState.is_weekend() and id in ["noise", "lawn_parking", "short_rental"])
-		if boosted:
-			pool.append(item.duplicate(true))
-	pool.shuffle()
-	var count := 1 + (1 if randf() < 0.3 else 0) + (1 if randf() < 0.12 else 0)
-	var violations: Array = []
-	var seen: Array = []
-	for item in pool:
-		if violations.size() >= count:
-			break
-		if str(item.id) in seen:
-			continue
-		seen.append(str(item.id))
-		var roll := randf()
-		item.actual = roll >= 0.22
-		item.borderline = roll >= 0.22 and roll < 0.38
-		item.documented = false
-		violations.append(item)
-	return violations
-
-
-func _create_politics() -> Dictionary:
-	var board: Array = []
-	for i in BOARD_NAMES.size():
-		board.append({"name": BOARD_NAMES[i], "support": 48 + (i * 7) % 17})
-	return {"board": board, "legal": 10, "enforce": {}}
-
-
-func _board_support() -> int:
-	var board: Array = _politics.get("board", [])
-	if board.is_empty():
-		return 50
-	var total := 0
-	for member in board:
-		total += int(member.support)
-	return total / board.size()
-
-
-## Shifts board support. `who` is a board index, or -1 for everyone.
-func _shift_board(delta: int, who := -1) -> void:
-	var board: Array = _politics.get("board", [])
-	for i in board.size():
-		if who < 0 or who == i:
-			board[i].support = clampi(int(board[i].support) + delta, 0, 100)
-	_politics.board = board
-
-
-## Effects may carry the political keys "legal" (risk) and "board" (support).
-func _apply_political(effects: Dictionary) -> void:
-	_politics.legal = clampi(int(_politics.get("legal", 0)) + int(effects.get("legal", 0)), 0, 120)
-	if effects.has("board"):
-		_shift_board(int(effects.board))
 	_refresh()
 
 
-func _property_relationship(house: int) -> String:
-	return str(_properties.get(house, {}).get("relationship", "neutral"))
-
-
-func _on_case_ruled(action: String, cited: Array) -> void:
-	var comp: Dictionary = _complaints[_active]
-	var card: Dictionary = comp.card
-	var actual_cited := 0
-	var false_cited := 0
-	for v in comp.get("violations", []):
-		if str(v.id) in cited:
-			if bool(v.actual):
-				actual_cited += 1
-			else:
-				false_cited += 1
-	var fx: Dictionary = {}
-	var pts := 0
-	var correct := false
-	if action == "dismiss":
-		fx = card.get("left", {}).get("effects", {}).duplicate(true)
-		correct = bool(comp.get("false_complaint", false))
-		pts = 100 if correct else -50
-	else:
-		fx = card.get("right", {}).get("effects", {}).duplicate(true)
-		if action == "warning":
-			for key in fx:
-				fx[key] = roundi(float(fx[key]) * 0.6)
-		elif action == "hearing":
-			fx = {"power": 2}
-		else:
-			fx["budget"] = int(fx.get("budget", 0)) + 6
-		correct = actual_cited > 0 and false_cited == 0
-		pts = 100 if correct else (-25 if cited.is_empty() else -75)
-	_close_overlay()
-	_resolve(fx, pts, correct, action, cited)
-
-
-func _record_case_outcome(house: int, action: String, correct, cited: Array) -> void:
-	var complaint: Dictionary = _complaints[house]
-	var false_complaint := bool(complaint.get("false_complaint", false))
-	var property: Dictionary = _properties[house]
-	var rel := str(property.get("relationship", "neutral"))
-	var evidence: Dictionary = _street.get_evidence().get(house, {})
-	var quality := int(evidence.get("quality", 0))
-	var documented: Array = evidence.get("documented", [])
-	var cited_actual := 0
-	var cited_false := 0
-	var cited_documented := 0
-	for v in complaint.get("violations", []):
-		if str(v.id) in cited:
-			if bool(v.actual):
-				cited_actual += 1
-				if str(v.id) in documented:
-					cited_documented += 1
-			else:
-				cited_false += 1
-	var strength := 0.0
-	if cited_actual > 0:
-		strength = clampf(0.25 + 0.5 * float(cited_documented) / maxf(cited.size(), 1.0) + 0.25 * quality / 100.0, 0.0, 1.0)
-		# A measured lawn is its own proof.
-		if str(complaint.get("kind", "")) == "lawn":
-			strength = maxf(strength, 0.7)
-	var enforcing := action != "dismiss"
-	var state := "cleared"
-	if not enforcing:
-		state = "cleared" if false_complaint else "missed_violation"
-	else:
-		var disputed := false_complaint or cited_false > 0 \
-				or (strength < 0.5 and randf() < (0.6 if rel == "legal_threat" else 0.3))
-		state = "disputed" if disputed else {"warning": "warning", "hearing": "hearing", "fine": "fined"}[action]
-	var day := GameState.day
-	_cases[house] = {
-		"property": house,
-		"address": _property_address(house),
-		"owner": _property_owner(house),
-		"violations": complaint.get("violations", []).duplicate(true),
-		"false_complaint": false_complaint,
-		"state": state,
-		"action": action,
-		"strength": strength,
-		"opened_day": day,
-		"cure_due": day + 2,
-		"hearing_day": day + 1,
-		"dispute_day": day + 1,
-		"evidence": evidence.duplicate(true),
-		"correct": correct,
-	}
-	var history: Array = property.get("history", [])
-	history.append({"day": day, "state": state, "action": action,
-			"violations": complaint.get("violations", []).duplicate(true)})
-	property.history = history
-	if enforcing and not false_complaint:
-		property.repeat_count = int(property.get("repeat_count", 0)) + 1
-	_properties[house] = property
-	# Politics: who gets enforced against, and who pushes back.
-	var tally: Dictionary = _politics.enforce.get(rel, {"cases": 0, "enforced": 0, "missed": 0})
-	if not false_complaint:
-		tally.cases = int(tally.cases) + 1
-		if enforcing:
-			tally.enforced = int(tally.enforced) + 1
-		else:
-			tally.missed = int(tally.missed) + 1
-	_politics.enforce[rel] = tally
-	var seat := house % BOARD_NAMES.size()
-	if rel == "board_member":
-		if enforcing:
-			_shift_board(-12, seat)
-			_shift_board(-2)
-		elif not false_complaint:
-			_shift_board(8, seat)
-	if enforcing and (false_complaint or cited_false > 0):
-		_apply_political({"legal": 6})
-	if enforcing and rel == "legal_threat" and strength < 0.6:
-		_apply_political({"legal": 8})
-	if not enforcing and not false_complaint and rel == "critic":
-		_apply_political({"board": -1})
-
-
-func _compliance_roll(house: int, bonus := 0) -> bool:
-	var property: Dictionary = _properties.get(house, {})
-	var chance := int(property.get("compliance", 60)) + bonus - 8 * int(property.get("repeat_count", 0))
-	return randi_range(0, 99) < clampi(chance, 10, 95)
-
-
-func _board_vote(house: int, strength: float) -> int:
-	var board: Array = _politics.board
-	var rel := _property_relationship(house)
-	var uphold := 0
-	for i in board.size():
-		var p := 0.3 + strength * 0.45 + (float(board[i].support) - 50.0) / 250.0
-		if rel == "board_member":
-			p -= 0.25 if i == house % board.size() else 0.1
-		elif rel == "critic":
-			p += 0.08
-		if randf() < p:
-			uphold += 1
-	return uphold
-
-
-## Advances every open case one day and returns report lines. Workflow:
-## warning -> (uncured) hearing -> (upheld) fine -> compliance or repeat violation.
-## A disputed notice is reviewed first and may be withdrawn.
-func _process_open_cases() -> Array:
-	var lines: Array = []
-	var day := GameState.day
-	for house_key in _cases.keys():
-		var record: Dictionary = _cases[house_key]
-		var house := int(house_key)
-		var property: Dictionary = _properties.get(house, {})
-		var address := _property_address(house)
-		var rel := str(property.get("relationship", "neutral"))
-		match str(record.get("state", "")):
-			"disputed":
-				if int(record.get("dispute_day", 9999)) > day:
-					continue
-				var strength := float(record.get("strength", 0.0))
-				var win := 0.85 if bool(record.get("false_complaint", false)) else clampf((1.0 - strength) * 0.8, 0.1, 0.8)
-				if randf() < win:
-					record.state = "overturned"
-					GameState.apply_effects({"budget": -12 if rel == "legal_threat" else -6, "happiness": 3})
-					_apply_political({"legal": 6})
-					lines.append("Dispute upheld at %s. Citation withdrawn." % address)
-				else:
-					record.state = {"warning": "warning", "hearing": "hearing", "fine": "fined"}.get(str(record.action), "warning")
-					record.cure_due = day + 2
-					record.hearing_day = day + 1
-					GameState.apply_effects({"happiness": -2})
-					lines.append("Dispute denied at %s. Notice stands." % address)
-			"warning":
-				if int(record.get("cure_due", 9999)) > day:
-					continue
-				if _compliance_roll(house):
-					record.state = "compliant"
-					GameState.add_score(35, true)
-					lines.append("%s cured the warning." % address)
-				else:
-					record.state = "hearing"
-					record.hearing_day = day + 1
-					lines.append("No cure at %s. Hearing set for tomorrow." % address)
-			"hearing":
-				if int(record.get("hearing_day", 9999)) > day:
-					continue
-				var uphold := _board_vote(house, float(record.get("strength", 0.0)))
-				var total: int = _politics.board.size()
-				if uphold * 2 > total:
-					var amount := 8 + 4 * int(property.get("repeat_count", 0))
-					record.state = "fined"
-					record.cure_due = day + 2
-					GameState.apply_effects({"budget": amount, "happiness": -4})
-					lines.append("Hearing at %s: board voted %d-%d. Fine upheld (+$%d)." % [address, uphold, total - uphold, amount])
-				else:
-					record.state = "overturned"
-					GameState.apply_effects({"power": -3, "happiness": 2})
-					lines.append("Hearing at %s: board voted %d-%d. Case dismissed." % [address, uphold, total - uphold])
-			"fined":
-				if int(record.get("cure_due", 9999)) > day:
-					continue
-				if _compliance_roll(house, 10):
-					record.state = "compliant"
-					GameState.add_score(35, true)
-					lines.append("%s paid and is now compliant." % address)
-				else:
-					record.state = "repeat_violation"
-					property.repeat_count = int(property.get("repeat_count", 0)) + 1
-					property.compliance = maxi(5, int(property.get("compliance", 60)) - 8)
-					GameState.apply_effects({"happiness": -3, "power": -2})
-					lines.append("Repeat violation at %s (offense #%d)." % [address, int(property.repeat_count)])
-			_:
-				continue
-		var history: Array = property.get("history", [])
-		history.append({"day": day, "state": record.state, "action": "follow_up"})
-		property.history = history
-		_properties[house] = property
-		_cases[house_key] = record
-	return lines
-
-
-func _process_projects() -> Array:
-	var lines: Array = []
-	var remaining: Array = []
-	for project in _projects:
-		var daily: Dictionary = project.get("daily", {})
-		_apply_political(daily)
-		GameState.apply_effects(daily)
-		project.days = int(project.get("days", 1)) - 1
-		if int(project.days) <= 0:
-			var finish: Dictionary = project.get("finish", {})
-			_apply_political(finish)
-			GameState.apply_effects(finish)
-			lines.append("%s finished." % str(project.get("name", "Project")))
-		else:
-			lines.append("%s: %d day(s) left." % [str(project.get("name", "Project")), int(project.days)])
-			remaining.append(project)
-	_projects = remaining
-	return lines
-
-
-func _enforce_rate(group: Array) -> Array:
-	var cases := 0
-	var enforced := 0
-	for rel in group:
-		var tally: Dictionary = _politics.enforce.get(rel, {})
-		cases += int(tally.get("cases", 0))
-		enforced += int(tally.get("enforced", 0))
-	return [cases, float(enforced) / maxf(float(cases), 1.0)]
-
-
-## Selective enforcement (critics cited far more than friends) feeds legal risk.
-func _process_politics() -> Array:
-	var lines: Array = []
-	if GameState.day <= 1:
-		return lines
-	var favored := _enforce_rate(FAVORED)
-	var critics := _enforce_rate(["critic", "legal_threat"])
-	if int(favored[0]) >= 3 and int(critics[0]) >= 3 and float(critics[1]) - float(favored[1]) > 0.4:
-		_apply_political({"legal": 8})
-		lines.append("Residents allege selective enforcement. Legal risk rising.")
-	else:
-		_apply_political({"legal": -2})
-	if int(_politics.legal) >= 100:
-		GameState.apply_effects({"budget": -25, "power": -8})
-		_politics.legal = 40
-		lines.append("A lawsuit settles for $25. The board is not pleased.")
-	elif int(_politics.legal) >= 70:
-		lines.append("Legal risk is high (%d). Counsel advises caution." % int(_politics.legal))
-	for member in _politics.board:
-		if int(member.support) < 30:
-			lines.append("%s is lobbying to remove you." % str(member.name))
-			GameState.apply_effects({"power": -2})
-			break
-	return lines
-
-
-func _annual_meeting() -> Array:
-	var lines: Array = ["ANNUAL MEETING. The board votes on your future."]
-	var power: int = GameState.stats.get("power", 50)
-	var retain := 0
-	for member in _politics.board:
-		if float(member.support) + randf_range(-10.0, 10.0) + (power - 50) * 0.3 - int(_politics.legal) * 0.15 >= 45.0:
-			retain += 1
-	lines.append("%d of %d members vote to retain you." % [retain, _politics.board.size()])
-	if retain * 2 <= _politics.board.size():
-		GameState.force_end("Voted out at the annual meeting. Recount denied.")
-		return lines
-	var bonus := GameState.add_score(150)
-	_shift_board(4)
-	lines.append("Re-elected! +%d points." % bonus)
-	return lines
-
-
-func _open_case_count() -> int:
-	var count := 0
-	for record in _cases.values():
-		if str(record.get("state", "")) in ["warning", "hearing", "fined", "disputed"]:
-			count += 1
-	return count
-
-
-func _on_lawn_done(effects: Dictionary, points: int, correct: bool, fined: bool) -> void:
-	var cited: Array = []
-	if fined:
-		cited.append(str(_complaints[_active].violations[0].id))
-	_resolve(effects, points, correct, "fine" if fined else "dismiss", cited)
-
-
-func _resolve(effects: Dictionary, points: int, correct, action := "warning", cited: Array = []) -> void:
-	var gained := GameState.add_score(points, correct)
-	GameState.apply_effects(effects)
-	_close_overlay()
-	if _is_over:
-		return
-	_float("%+d" % gained, Color("7ee081") if gained >= 0 else Color("ff6b5a"))
-	_record_case_outcome(_active, action, correct, cited)
-	_street.mark_done(_active)
-	if _active not in _completed:
-		_completed.append(_active)
-	_done += 1
-	_update_task()
-	if _done >= _complaints.size():
-		_evening()
-	else:
-		_save_progress(true)
-
+# ---------------------------------------------------------------- evening
 
 func _evening() -> void:
 	var finished := GameState.day
 	var bonus := GameState.end_day()
 	_phase = "evening"
 	_evening_bonus = bonus.duplicate(true)
+	if finished == 1:
+		Settings.tutorial_done = true
+		Settings.save()
 	_save_progress()
 	_show_evening(finished, bonus)
 
 
 func _show_evening(finished: int, bonus: Dictionary) -> void:
 	_overlay.show()
-	var panel := Panel.new()
-	panel.add_theme_stylebox_override("panel", _card_style())
-	panel.size = Vector2(600, 640)
-	panel.position = (size - panel.size) / 2.0
-	_overlay.add_child(panel)
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 32.0
-	box.offset_right = -32.0
-	box.offset_top = 32.0
-	box.offset_bottom = -32.0
-	box.add_theme_constant_override("separation", 18)
-	panel.add_child(box)
-	box.add_child(_make_label("DAY %d COMPLETE" % finished, 44, Color("1c1b1f"), true))
-	box.add_child(_make_label("Day bonus  +%d" % bonus.day_bonus, 32, Color("1c1b1f")))
-	box.add_child(_make_label("Balanced stats  +%d" % bonus.balance_bonus, 32, Color("1c1b1f")))
-	box.add_child(_make_label("Streak  x%d" % GameState.streak, 32, Color("1c1b1f")))
-	box.add_child(_make_label("Open cases  %d" % _open_case_count(), 32, Color("1c1b1f")))
-	box.add_child(_make_label("SCORE  %d" % GameState.score, 44, Color("2f9e57"), true))
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(spacer)
-	var btn := Button.new()
-	btn.text = "NEXT DAY"
-	btn.custom_minimum_size = Vector2(0, 90)
-	btn.add_theme_font_size_override("font_size", 34)
+	var modal := UiKit.modal(size, Vector2(600, 700), "DAY %d COMPLETE" % finished)
+	_overlay.add_child(modal.root)
+	var body: VBoxContainer = modal.body
+	body.add_child(UiKit.label("Day bonus  +%d" % int(bonus.day_bonus), 30))
+	body.add_child(UiKit.label("Balanced stats  +%d" % int(bonus.balance_bonus), 30))
+	body.add_child(UiKit.label("Streak  x%d" % GameState.streak, 30))
+	body.add_child(UiKit.label("Open cases  %d" % sim.open_case_count(), 30))
+	body.add_child(UiKit.label("SCORE  %s" % _commas(GameState.score), 42, UiKit.GOOD, true))
+	var counsel: String = sim.board.counsel_warning(sim.politics)
+	if counsel != "":
+		body.add_child(UiKit.label("LEGAL COUNSEL: \"%s\"" % counsel, 19, UiKit.BAD))
+	var btn := UiKit.button("NEXT DAY", 34, 90)
 	btn.pressed.connect(func():
 		_close_overlay()
 		GameState.next_day()
 		_new_day())
-	box.add_child(btn)
+	modal.footer.add_child(btn)
 
 
-func _save_progress(show_feedback := false) -> void:
-	if not is_instance_valid(_street) or _complaints.is_empty() or _is_over:
-		return
-	GameState.save_run({
-		"world_version": 5,
-		"politics": _politics.duplicate(true),
-		"projects": _projects.duplicate(true),
-		"complaints": _complaints.duplicate(true),
-		"grass": _grass.duplicate(),
-		"completed": _completed.duplicate(),
-		"phase": _phase,
-		"evening_bonus": _evening_bonus.duplicate(true),
-		"evidence": _street.get_evidence(),
-		"properties": _properties.duplicate(true),
-		"cases": _cases.duplicate(true),
-		"player_position": _street.get_player_position(),
-	})
-	if show_feedback and is_instance_valid(_save_label):
-		_save_label.text = "SAVED"
-		_save_label.modulate.a = 1.0
-		var tween := create_tween()
-		tween.tween_property(_save_label, "modulate:a", 0.35, 1.2).set_delay(0.5)
-
+# ---------------------------------------------------------------- HUD
 
 func _close_overlay() -> void:
 	for child in _overlay.get_children():
@@ -955,22 +697,40 @@ func _close_overlay() -> void:
 func _on_game_over(reason: String) -> void:
 	_is_over = true
 	_close_overlay()
-	_over_label.text = "%s\n\nSurvived %d days.\nScore %d  ·  Best %d" % [
-			reason, GameState.day - 1, GameState.score, GameState.best]
+	_over_label.text = "%s\n\nSurvived %d days.\nScore %s  ·  Best %s" % [reason, GameState.day - 1, _commas(GameState.score), _commas(GameState.best)]
 	_over_panel.show()
+	Sfx.play("bad")
+
+
+func _commas(value: int) -> String:
+	var s := str(absi(value))
+	var out := ""
+	for i in s.length():
+		if i > 0 and (s.length() - i) % 3 == 0:
+			out += ","
+		out += s[i]
+	return ("-" if value < 0 else "") + out
 
 
 func _refresh() -> void:
+	if not is_instance_valid(_day_label):
+		return
 	_day_label.text = "DAY %d" % GameState.day
-	_score_label.text = "SCORE %d" % GameState.score + ("  x%d" % GameState.streak if GameState.streak > 1 else "")
-	_best_label.text = "BEST %d" % GameState.best
-	if is_instance_valid(_politics_label) and not _politics.is_empty():
-		_politics_label.text = "BOARD %d · LEGAL %d" % [_board_support(), int(_politics.get("legal", 0))]
+	_score_label.text = "SCORE %s" % _commas(GameState.score) + ("  x%d" % GameState.streak if GameState.streak > 1 else "")
+	_best_label.text = "BEST %s" % _commas(GameState.best)
 	for key in _bars:
 		var bar: ProgressBar = _bars[key]
 		var value: int = GameState.stats[key]
 		create_tween().tween_property(bar, "value", value, 0.2)
 		bar.modulate = Color("e0533d") if value <= 20 or value >= 80 else Color.WHITE
+		if key == "budget":
+			(_stat_labels[key] as Label).text = "%s  $%s" % [STAT_LABELS[key], _commas(value * DOLLARS_PER_POINT)]
+		else:
+			(_stat_labels[key] as Label).text = "%s  %d" % [STAT_LABELS[key], value]
+	if sim.politics.is_empty():
+		_politics_label.text = ""
+	else:
+		_politics_label.text = "BOARD %d%% · LEGAL RISK %d%%" % [sim.board_support(), sim.legal_risk()]
 
 
 func _float(text: String, color: Color) -> void:
@@ -987,12 +747,52 @@ func _float(text: String, color: Color) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
+func _float_small(text: String) -> void:
+	if _overlay.visible:
+		return
+	var label := _make_label(text, 26, Color.WHITE, true)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	label.add_theme_constant_override("outline_size", 6)
+	label.size = Vector2(size.x - 80, 60)
+	label.position = Vector2(40, size.y * 0.42)
+	label.z_index = 20
+	add_child(label)
+	var tween := create_tween()
+	tween.tween_property(label, "modulate:a", 0.0, 1.4).set_delay(0.8)
+	tween.tween_callback(label.queue_free)
+
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(_street) or _street.house_count() == 0:
+		return
+	_update_hint()
+
+
+## First-day coaching: one short line at a time, gone once the loop is understood.
+func _update_hint() -> void:
+	if Settings.tutorial_done or GameState.day != 1 or _phase != "street" or _overlay.visible or is_instance_valid(_title):
+		_street.set_hint("")
+		return
+	var hint := ""
+	var target: int = _street.objective
+	if not _street.used:
+		hint = "Drag anywhere to walk"
+	elif target >= 0 and _street.near != target:
+		hint = "Walk to the gold pin: %s" % _street.lot_address(target)
+	elif target >= 0 and not _street.get_evidence().has(target) and not _street.camera_ev.active:
+		hint = "Tap the camera to photograph the property"
+	elif target >= 0 and _street.camera_ev.active:
+		hint = "Center the house and take the photo"
+	elif target >= 0:
+		hint = "Tap INSPECT PROPERTY to open the case"
+	_street.set_hint(hint)
+
+
 func _build_ui() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color("2f4858")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-
 	var margin := MarginContainer.new()
 	_margin = margin
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1001,74 +801,74 @@ func _build_ui() -> void:
 	add_child(margin)
 	_apply_safe_area()
 	get_viewport().size_changed.connect(_apply_safe_area)
-
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
-
 	var info := HBoxContainer.new()
 	vbox.add_child(info)
-	_day_label = _make_label("DAY 1", 30, Color.WHITE)
+	_day_label = _make_label("DAY 1", 28, Color.WHITE)
 	_day_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_child(_day_label)
-	_score_label = _make_label("SCORE 0", 30, Color("ffd36e"), true)
+	_score_label = _make_label("SCORE 0", 28, Color("ffd36e"), true)
 	_score_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_score_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	info.add_child(_score_label)
-	_best_label = _make_label("BEST 0", 30, Color.WHITE)
+	_best_label = _make_label("BEST 0", 28, Color.WHITE)
 	_best_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	info.add_child(_best_label)
-
-	var meta := HBoxContainer.new()
-	vbox.add_child(meta)
-	_save_label = _make_label("AUTO-SAVE", 18, Color("b9d8e8"), false)
-	_save_label.modulate.a = 0.35
-	_save_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	meta.add_child(_save_label)
-	_politics_label = _make_label("", 18, Color("ffd36e"), false)
-	_politics_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_politics_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_politics_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	meta.add_child(_politics_label)
-	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
-	_version_label = _make_label("v%s" % version, 18, Color("b9d8e8"), false)
-	_version_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_version_label.custom_minimum_size = Vector2(120, 0)
-	_version_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	meta.add_child(_version_label)
-
 	var stats_row := HBoxContainer.new()
-	stats_row.add_theme_constant_override("separation", 20)
+	stats_row.add_theme_constant_override("separation", 14)
 	vbox.add_child(stats_row)
 	for key in GameState.STAT_KEYS:
 		var col := VBoxContainer.new()
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		stats_row.add_child(col)
-		col.add_child(_make_label(STAT_LABELS[key], 22, Color.WHITE, true))
+		var label := _make_label(STAT_LABELS[key], 17, Color.WHITE, true)
+		label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		col.add_child(label)
+		_stat_labels[key] = label
 		var bar := ProgressBar.new()
 		bar.show_percentage = false
-		bar.custom_minimum_size = Vector2(0, 20)
+		bar.custom_minimum_size = Vector2(0, 16)
 		bar.value = GameState.START_VALUE
 		col.add_child(bar)
 		_bars[key] = bar
-
+	var meta := HBoxContainer.new()
+	meta.add_theme_constant_override("separation", 10)
+	vbox.add_child(meta)
+	_menu_button = Button.new()
+	_menu_button.text = "MENU"
+	_menu_button.custom_minimum_size = Vector2(96, 40)
+	_menu_button.add_theme_font_size_override("font_size", 18)
+	_menu_button.pressed.connect(func():
+		Sfx.play("tap")
+		_open_menu())
+	meta.add_child(_menu_button)
+	_politics_label = _make_label("", 17, Color("ffd36e"), true)
+	_politics_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_politics_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meta.add_child(_politics_label)
+	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
+	_version_label = _make_label("v%s" % version, 16, Color("b9d8e8"), false)
+	_version_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	meta.add_child(_version_label)
 	_street = Control.new()
 	_street.set_script(STREET_SCRIPT)
 	_street.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_street.visit.connect(_on_visit)
 	_street.photo_taken.connect(_on_photo)
+	_street.discover.connect(_on_discover)
+	_street.evidence_changed.connect(func(): _save_progress())
 	vbox.add_child(_street)
-
-	_task_label = _make_label("", 24, Color.WHITE, true)
+	_task_label = _make_label("", 22, Color.WHITE, true)
 	vbox.add_child(_task_label)
-
 	_overlay = ColorRect.new()
 	_overlay.color = Color(0, 0, 0, 0.65)
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.hide()
 	add_child(_overlay)
-
 	_build_game_over()
 	_refresh()
 
@@ -1077,24 +877,24 @@ func _build_game_over() -> void:
 	_over_panel = ColorRect.new()
 	(_over_panel as ColorRect).color = Color(0, 0, 0, 0.8)
 	_over_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_over_panel.z_index = 45
 	_over_panel.hide()
 	add_child(_over_panel)
-
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_CENTER)
 	box.custom_minimum_size = Vector2(560, 0)
 	box.position = Vector2(80, 420)
 	box.add_theme_constant_override("separation", 40)
 	_over_panel.add_child(box)
-
-	_over_label = _make_label("", 38, Color.WHITE, true)
+	_over_label = _make_label("", 36, Color.WHITE, true)
 	box.add_child(_over_label)
-
 	var button := Button.new()
-	button.text = "Run Again"
+	button.text = "New Term"
 	button.custom_minimum_size = Vector2(0, 90)
 	button.add_theme_font_size_override("font_size", 36)
-	button.pressed.connect(_start)
+	button.pressed.connect(func():
+		_over_panel.hide()
+		_show_title())
 	box.add_child(button)
 
 
@@ -1109,30 +909,13 @@ func _apply_safe_area() -> void:
 		top = maxf(float(safe.position.y) * k, 0.0)
 		bottom = maxf((win.y - float(safe.end.y)) * k, 0.0)
 	if OS.get_name() == "iOS":
-		# Modern iOS reports the safe area. Use a modest fallback only when it does not.
 		if top <= 0.0:
 			top = 36.0
 		if bottom <= 0.0:
 			bottom = 18.0
-	_margin.add_theme_constant_override("margin_top", 24 + int(top))
-	_margin.add_theme_constant_override("margin_bottom", 24 + int(bottom))
-
-
-func _card_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("f4ecd8")
-	style.set_corner_radius_all(28)
-	style.shadow_size = 12
-	style.shadow_color = Color(0, 0, 0, 0.35)
-	return style
+	_margin.add_theme_constant_override("margin_top", 14 + int(top))
+	_margin.add_theme_constant_override("margin_bottom", 14 + int(bottom))
 
 
 func _make_label(text: String, font_size: int, color: Color, centered := false) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	if centered:
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	return label
+	return UiKit.label(text, font_size, color, centered)

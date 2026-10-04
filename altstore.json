@@ -6,9 +6,9 @@
     {
       "name": "HOA President",
       "bundleIdentifier": "com.ssnanda.hoagame",
-      "developerName": "ssnanda",
+      "developerName": "ITSpector LLC",
       "subtitle": "Run your HOA. Survive the meeting.",
-      "localizedDescription": "Swipe on neighborhood complaints and try to stay HOA president.",
+      "localizedDescription": "Patrol the neighborhood, investigate complaints, photograph evidence, manage residents, survive board politics, and try to keep your seat as HOA President.",
       "iconURL": "https://raw.githubusercontent.com/ssnanda/hoagame/main/icon.png",
       "tintColor": "2F4858",
       "screenshotURLs": [],

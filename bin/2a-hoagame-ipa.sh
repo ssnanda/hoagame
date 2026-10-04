@@ -191,9 +191,9 @@ write_altstore_manifest() {
     {
       "name": "$APP_NAME",
       "bundleIdentifier": "$BUNDLE_ID",
-      "developerName": "ssnanda",
+      "developerName": "ITSpector LLC",
       "subtitle": "Run your HOA. Survive the meeting.",
-      "localizedDescription": "Swipe on neighborhood complaints and try to stay HOA president.",
+      "localizedDescription": "Patrol the neighborhood, investigate complaints, photograph evidence, manage residents, survive board politics, and try to keep your seat as HOA President.",
       "iconURL": "$ALTSTORE_ICON_URL",
       "tintColor": "2F4858",
       "screenshotURLs": [],

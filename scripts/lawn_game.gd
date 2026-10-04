@@ -1,32 +1,12 @@
 extends Panel
-## Lawn inspection: line the marker up with the tallest blade, lock the reading, then rule on it.
+## Lawn measurement: line the marker up with the tallest blade and record the reading.
+## The verdict happens on the case sheet; this is evidence gathering.
 
-signal done(effects: Dictionary, points: int, correct: bool, fined: bool)
+signal measured(reading: float, precise: bool)
 
 const LIMIT_IN := 6.0
 const PPI := 30.0
 const FIELD_SIZE := Vector2(560, 400)
-const OPENERS := [
-	"Is that a lawn or a hay farm? Measure it. The limit is 6 inches.",
-	"I saw a rabbit go in and not come out. Please measure the grass.",
-	"My property value is wilting. Check that lawn. Limit: 6 inches.",
-	"It's technically a meadow, but not an approved one. Measure it.",
-	"The mower has been 'in the shop' since spring. Verify the evidence.",
-	"Someone claims this is native landscaping. The bylaws claim otherwise.",
-	"A tennis ball disappeared in this grass. Measure before searching.",
-]
-const FINE_OK := [
-	"Fined. He mutters, 'It's a meadow, Karen.'",
-	"Fine issued. A lawnmower is ordered, reluctantly.",
-	"Violation confirmed. The mower starts before you leave the driveway.",
-	"Citation posted. The grass has lost its appeal hearing.",
-]
-const SLIDE_OK := [
-	"Left alone. The neighbor waves from a very short lawn.",
-	"Dismissed. Nobody loves a tape measure.",
-	"Compliant. The lawn receives an official nod.",
-	"No violation. The neighborhood group chat goes briefly quiet.",
-]
 
 var inches := 5.0
 var who := ""
@@ -35,10 +15,6 @@ var _locked := false
 var _reading := 1.0
 var _field: Field
 var _reading_label: Label
-var _verdict_row: HBoxContainer
-var _result: Label
-var _next_btn: Button
-var _pending: Array = []
 
 
 class Field extends Control:
@@ -137,10 +113,9 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 14)
 	margin.add_child(box)
 
-	box.add_child(_label("LAWN INSPECTION — %s" % who, 24, Color("6b6b6b")))
-	var complaint := _label(OPENERS[randi() % OPENERS.size()], 30, Color("1c1b1f"))
-	box.add_child(complaint)
-	box.add_child(_label("Line up the marker, then choose one verdict.", 22, Color("6b6b6b")))
+	box.add_child(_label("LAWN MEASUREMENT — %s" % who, 24, Color("6b6b6b")))
+	box.add_child(_label("Measure the tallest blade against the 6 inch limit.", 28, Color("1c1b1f")))
+	box.add_child(_label("Drag the marker to the top of the grass, then record it. Precise readings count as evidence.", 20, Color("6b6b6b")))
 
 	_field = Field.new()
 	_field.setup(inches)
@@ -151,25 +126,9 @@ func _ready() -> void:
 	_reading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_reading_label)
 
-	_verdict_row = HBoxContainer.new()
-	_verdict_row.add_theme_constant_override("separation", 16)
-	box.add_child(_verdict_row)
-	var fine_btn := _button("ISSUE FINE")
-	fine_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fine_btn.pressed.connect(_rule.bind(true))
-	_verdict_row.add_child(fine_btn)
-	var slide_btn := _button("NO VIOLATION")
-	slide_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slide_btn.pressed.connect(_rule.bind(false))
-	_verdict_row.add_child(slide_btn)
-
-	_result = _label("", 28, Color("1c1b1f"))
-	_result.hide()
-	box.add_child(_result)
-	_next_btn = _button("CONTINUE")
-	_next_btn.hide()
-	_next_btn.pressed.connect(func(): done.emit(_pending[0], _pending[1], _pending[2], _pending[3]))
-	box.add_child(_next_btn)
+	var record_btn := _button("RECORD MEASUREMENT")
+	record_btn.pressed.connect(_record)
+	box.add_child(record_btn)
 
 
 func _on_reading(value: float) -> void:
@@ -177,51 +136,13 @@ func _on_reading(value: float) -> void:
 	_reading_label.text = "Reading: %.1f in" % value
 
 
-func _rule(fine: bool) -> void:
+func _record() -> void:
 	if _locked:
 		return
 	_locked = true
 	_field.locked = true
 	_field.queue_redraw()
-	_reading_label.text = "Recorded %.1f in (limit %d)" % [_reading, int(LIMIT_IN)]
-	var violation := inches > LIMIT_IN
-	var correct := fine == violation
-	var precise := absf(_reading - inches) <= 0.6
-	var fx: Dictionary
-	var pts: int
-	var text: String
-	if fine and violation:
-		fx = {"budget": 8, "power": 6, "happiness": -6}
-		pts = 100
-		text = FINE_OK[randi() % FINE_OK.size()]
-	elif not fine and not violation:
-		fx = {"happiness": 6, "power": 2}
-		pts = 100
-		text = SLIDE_OK[randi() % SLIDE_OK.size()]
-	elif fine:
-		fx = {"budget": -10, "happiness": -14, "power": -6}
-		pts = -75
-		text = "Wrongful fine! The grass was only %.1f in. A lawyer is en route." % inches
-	else:
-		fx = {"happiness": -8, "power": -8}
-		pts = -50
-		text = "You let a hay farm slide. It was %.1f in. The neighbors noticed." % inches
-	if correct and precise:
-		pts += 50
-		text += "\nPrecise measuring: +50"
-	_verdict_row.hide()
-	_result.text = "%s\n%s" % [text, _fx_text(fx)]
-	_result.show()
-	_next_btn.show()
-	_pending = [fx, pts, correct, fine]
-
-
-func _fx_text(fx: Dictionary) -> String:
-	var names := {"budget": "BUDGET", "happiness": "HAPPY", "power": "POWER"}
-	var parts: Array = []
-	for key in fx:
-		parts.append("%s %+d" % [names[key], int(fx[key])])
-	return "  ·  ".join(parts)
+	measured.emit(_reading, absf(_reading - inches) <= 0.6)
 
 
 func _label(text: String, font_size: int, color: Color) -> Label:

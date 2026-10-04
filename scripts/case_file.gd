@@ -1,15 +1,20 @@
 extends Panel
-## Case file for a complaint: tick the violations you are citing, then choose an
-## action. Dismiss / warn / schedule a hearing / fine.
+## Case sheet: PROPERTY, COMPLAINT, OBSERVATIONS, POSSIBLE VIOLATIONS, ACTION.
+## Tick what you can support, then choose. Actions obey the HOA rules and say why
+## when one is unavailable.
+
+const UiKit := preload("res://scripts/ui/ui_kit.gd")
 
 signal ruled(action: String, cited: Array)
 
-const PANEL_SIZE := Vector2(620, 900)
+const PANEL_SIZE := Vector2(640, 1000)
+const ACTION_LABELS := {"dismiss": "DISMISS", "warning": "WARNING", "hearing": "HEARING", "fine": "FINE"}
 
 var data: Dictionary = {}
 
 var _checks: Array = []
-var _buttons: Array = []
+var _buttons: Dictionary = {}
+var _reason: Label
 
 
 func setup(case_data: Dictionary) -> void:
@@ -19,88 +24,119 @@ func setup(case_data: Dictionary) -> void:
 func _ready() -> void:
 	custom_minimum_size = PANEL_SIZE
 	size = PANEL_SIZE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("f4ecd8")
-	style.set_corner_radius_all(28)
-	style.shadow_size = 12
-	style.shadow_color = Color(0, 0, 0, 0.35)
-	add_theme_stylebox_override("panel", style)
+	add_theme_stylebox_override("panel", UiKit.panel_style())
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 26)
+		margin.add_theme_constant_override("margin_" + side, 24)
 	add_child(margin)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	margin.add_child(column)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	margin.add_child(box)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 6)
+	scroll.add_child(box)
 
-	box.add_child(_label("CASE FILE · %s" % str(data.get("address", "")), 22, Color("6b6b6b")))
-	box.add_child(_label(str(data.get("owner", "")), 30, Color("1c1b1f")))
-	var tags: Array = [str(data.get("relationship", "neutral")).replace("_", " ").to_upper()]
+	box.add_child(UiKit.section("PROPERTY"))
+	box.add_child(UiKit.label(str(data.get("address", "")), 30, UiKit.INK))
+	box.add_child(UiKit.label("%s · %s" % [str(data.get("owner", "")), str(data.get("relationship", "Neutral"))], 22, UiKit.ACCENT))
+	var tags: Array = []
 	if int(data.get("repeat_count", 0)) > 0:
-		tags.append("REPEAT x%d" % int(data.repeat_count))
-	if str(data.get("lot_type", "")) != "standard":
+		tags.append("REPEAT OFFENDER x%d" % int(data.repeat_count))
+	if str(data.get("lot_type", "standard")) != "standard":
 		tags.append(str(data.get("lot_type", "")).replace("_", " ").to_upper())
-	box.add_child(_label(" · ".join(tags), 18, Color("b3261e")))
-	box.add_child(_label(str(data.get("text", "")), 24, Color("1c1b1f")))
+	if not tags.is_empty():
+		box.add_child(UiKit.label(" · ".join(tags), 17, UiKit.BAD))
+	var blurb := str(data.get("blurb", ""))
+	if blurb != "":
+		box.add_child(UiKit.label(blurb, 17, UiKit.MUTED))
+	for line in data.get("history", []):
+		box.add_child(UiKit.label(str(line), 16, UiKit.MUTED))
 
-	var quality := int(data.get("quality", 0))
-	var evidence_text := "NO PHOTO ON FILE" if quality <= 0 else "PHOTO QUALITY %d%% · %d shot(s)" % [quality, int(data.get("shots", 1))]
-	box.add_child(_label(evidence_text, 20, Color("2f9e57") if quality >= 70 else Color("b3261e")))
 	box.add_child(HSeparator.new())
-	box.add_child(_label("CITE (tick what you can support)", 18, Color("6b6b6b")))
-	var documented: Array = data.get("documented", [])
-	for violation in data.get("violations", []):
-		var check := CheckButton.new()
-		var note := "photo ✓" if str(violation.id) in documented else "no photo"
-		check.text = "%s  (%s%s)" % [str(violation.label), note, ", borderline" if bool(violation.get("borderline", false)) else ""]
-		check.button_pressed = true
-		check.add_theme_font_size_override("font_size", 22)
-		check.set_meta("id", str(violation.id))
+	box.add_child(UiKit.section("COMPLAINT · %s" % str(data.get("source", ""))))
+	box.add_child(UiKit.label(str(data.get("text", "")), 24, UiKit.INK))
+	var reliability := str(data.get("reliability", ""))
+	if reliability != "":
+		box.add_child(UiKit.label(reliability, 16, UiKit.MUTED))
+
+	box.add_child(HSeparator.new())
+	box.add_child(UiKit.section("OBSERVATIONS"))
+	var photos: Array = data.get("photos", [])
+	if photos.is_empty():
+		box.add_child(UiKit.label("No photos on file. Use the camera at the property.", 19, UiKit.BAD))
+	else:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		box.add_child(row)
+		for tex in photos:
+			var rect := TextureRect.new()
+			rect.texture = tex
+			rect.custom_minimum_size = Vector2(170, 118)
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			row.add_child(rect)
+		box.add_child(UiKit.label("Best photo quality %d%% · %d shot(s)" % [int(data.get("quality", 0)), int(data.get("shots", 0))], 17, UiKit.GOOD if int(data.get("quality", 0)) >= 70 else UiKit.MUTED))
+	for note in data.get("observations", []):
+		box.add_child(UiKit.label("• %s" % str(note), 18, UiKit.INK))
+
+	box.add_child(HSeparator.new())
+	box.add_child(UiKit.section("POSSIBLE VIOLATIONS · tick what you can support"))
+	for v in data.get("violations", []):
+		var suffix := ""
+		if bool(v.get("documented", false)):
+			suffix = "  [photo ✓]"
+		elif bool(v.get("cleared", false)):
+			suffix = "  [photo: nothing seen]"
+		var check := UiKit.check("%s%s" % [str(v.label), suffix], 22)
+		check.button_pressed = bool(v.get("documented", false))
+		check.set_meta("id", str(v.id))
+		check.toggled.connect(func(_on): _refresh_actions())
 		box.add_child(check)
 		_checks.append(check)
-	var history: Array = data.get("history", [])
-	if not history.is_empty():
-		box.add_child(HSeparator.new())
-		box.add_child(_label("HISTORY", 18, Color("6b6b6b")))
-		for entry in history.slice(maxi(0, history.size() - 3)):
-			box.add_child(_label("Day %d · %s" % [int(entry.get("day", 0)), str(entry.get("state", "")).replace("_", " ")],
-					18, Color("425466")))
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(spacer)
+
+	column.add_child(HSeparator.new())
+	column.add_child(UiKit.section("ACTION"))
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	box.add_child(grid)
-	for spec in [["dismiss", "DISMISS"], ["warning", "WARNING"], ["hearing", "HEARING"], ["fine", "FINE"]]:
-		var btn := Button.new()
-		btn.text = str(spec[1])
-		btn.custom_minimum_size = Vector2(0, 80)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.add_theme_font_size_override("font_size", 28)
-		btn.pressed.connect(_choose.bind(str(spec[0])))
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	column.add_child(grid)
+	for action in ["dismiss", "warning", "hearing", "fine"]:
+		var btn := UiKit.button(str(ACTION_LABELS[action]), 26, 70)
+		btn.pressed.connect(_choose.bind(action))
 		grid.add_child(btn)
-		_buttons.append(btn)
+		_buttons[action] = btn
+	_reason = UiKit.label("", 16, UiKit.BAD)
+	column.add_child(_reason)
+	_refresh_actions()
+
+
+func _cited() -> Array:
+	var cited: Array = []
+	for check in _checks:
+		if (check as CheckButton).button_pressed:
+			cited.append(str(check.get_meta("id")))
+	return cited
+
+
+func _refresh_actions() -> void:
+	var options: Dictionary = (data.options_for as Callable).call(_cited()) if data.has("options_for") else {}
+	var reasons: Array = []
+	for action in _buttons:
+		var option: Dictionary = options.get(action, {"enabled": true, "reason": ""})
+		(_buttons[action] as Button).disabled = not bool(option.enabled)
+		if not bool(option.enabled) and str(option.reason) != "" and not str(option.reason) in reasons:
+			reasons.append("%s: %s" % [str(ACTION_LABELS[action]).capitalize(), str(option.reason)])
+	_reason.text = "\n".join(reasons)
 
 
 func _choose(action: String) -> void:
-	for btn in _buttons:
+	for btn in _buttons.values():
 		(btn as Button).disabled = true
-	var cited: Array = []
-	if action != "dismiss":
-		for check in _checks:
-			if (check as CheckButton).button_pressed:
-				cited.append(str(check.get_meta("id")))
-	ruled.emit(action, cited)
-
-
-func _label(text: String, font_size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return label
+	ruled.emit(action, _cited() if action != "dismiss" else [])
