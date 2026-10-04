@@ -9,7 +9,7 @@ set -euo pipefail
 # Version bumping lives in bin/1-bump-version.sh. This script calls it when the
 # working tree has uncommitted changes (or with --bump/--version/--no-bump).
 # By default it builds the IPA, pushes the branch, updates altstore.json, and
-# refreshes the rolling ios-latest GitHub release.
+# publishes an immutable versioned GitHub release.
 #
 # Common runs:
 #   ./bin/2a-hoagame-ipa.sh
@@ -28,8 +28,8 @@ IPA_BUILD_DIR="$ROOT_DIR/build/ios"
 IPA_BUILD_PATH="$IPA_BUILD_DIR/hoagame.ipa"
 IPA_FINAL_PATH="$IPA_OUTPUT_DIR/hoagame.ipa"
 GITHUB_REPO="ssnanda/hoagame"
-RELEASE_TAG="ios-latest"
-RELEASE_TITLE="HOA President — iOS (latest)"
+RELEASE_TAG=""
+RELEASE_TITLE=""
 
 ALTSTORE_MANIFEST="$ROOT_DIR/altstore.json"
 ALTSTORE_BRANCH="main"
@@ -57,7 +57,7 @@ Options:
   --delete              Delete the local IPA and exit (no build)
   --repo OWNER/REPO     Override GitHub repo (default: ssnanda/hoagame)
   --local               Build locally without pushing or publishing
-  --no-publish          Build and push, but don't refresh ios-latest
+  --no-publish          Build and push, but don't publish a GitHub release
   --push                Explicitly enable the default push behavior
   --publish             Explicitly enable the default publish behavior
   --no-git-commit       Rewrite version files only, don't commit the bump
@@ -66,7 +66,7 @@ Options:
 Env:
   GODOT=/path/to/Godot  (default /Applications/Godot.app/Contents/MacOS/Godot)
 
-Default: bump when dirty, build IPA, push, update altstore.json, and publish ios-latest.
+Default: bump when dirty, build IPA, push, update altstore.json, and publish a versioned release.
 One-time setup: Godot > Editor > Manage Export Templates > Download.
 USAGE
 }
@@ -199,9 +199,10 @@ JSON
   fi
 }
 
-# Publish the IPA to ONE rolling release: re-point "ios-latest" at HEAD,
-# delete the previous release, create a fresh one with the IPA attached.
-publish_latest_ipa() {
+# Publish each IPA at an immutable version-specific URL. AltStore may cache an
+# older source JSON; reusing one rolling asset URL can make that cached source
+# download a newer IPA and reject it for a version mismatch.
+publish_versioned_ipa() {
   require_gh
   cd "$ROOT_DIR"
 
@@ -209,16 +210,16 @@ publish_latest_ipa() {
   sha="$(git rev-parse --short HEAD)"
   notes="$APP_NAME iOS — version $VERSION
 Built $(date '+%Y-%m-%d %H:%M %Z') from commit $sha.
-This release always holds the latest build; older builds are not kept."
+This release contains the immutable IPA for $VERSION."
 
-  echo "Moving rolling tag $RELEASE_TAG to $sha..."
-  git tag -f "$RELEASE_TAG" >/dev/null
-  git push -f origin "$RELEASE_TAG"
+	  echo "Tagging $RELEASE_TAG at $sha..."
+	  git tag "$RELEASE_TAG"
+	  git push origin "$RELEASE_TAG"
 
-  if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
-    echo "Removing previous $RELEASE_TAG release..."
-    gh release delete "$RELEASE_TAG" --repo "$GITHUB_REPO" --yes
-  fi
+	  if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
+	    echo "Error: immutable release $RELEASE_TAG already exists" >&2
+	    exit 1
+	  fi
 
   gh release create "$RELEASE_TAG" "$IPA_FINAL_PATH" \
     --repo "$GITHUB_REPO" \
@@ -280,6 +281,8 @@ fi
 
 VERSION="$(get_version)"
 validate_version "$VERSION"
+RELEASE_TAG="ios-${VERSION/+/-}"
+RELEASE_TITLE="$APP_NAME — iOS $VERSION"
 
 if [[ "$GIT_PUSH" == "true" ]]; then
   git_sync_branch
@@ -306,7 +309,7 @@ if [[ "$GIT_PUSH" == "true" ]]; then
 fi
 
 if [[ "$GITHUB_RELEASE" == "true" ]]; then
-  publish_latest_ipa
+  publish_versioned_ipa
 fi
 
 echo ""
