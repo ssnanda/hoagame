@@ -1,6 +1,6 @@
 extends Control
-## Top-down vertical street. Hold a thumb anywhere (bottom-right works) and drag up/down
-## to walk; houses glow as you pass, release to inspect the glowing one.
+## Top-down neighborhood. Drag up/down to follow a sidewalk, push sideways to
+## deliberately enter the road or turn at an intersection.
 
 signal visit(house: int)
 
@@ -21,7 +21,13 @@ const NEAR_DIST := 120.0
 const TUFTS := 46
 const INCH_PX := 4.5
 const WALKER_K := 1.4
+const SIDEWALK_CENTER := ROAD_HALF + WALK_W * 0.5
+const LANE_SWITCH_INPUT := 0.52
+const LATERAL_SNAP_SPEED := 520.0
+const CAR_CLEAR_X := 42.0
+const CAR_CLEAR_Y := 58.0
 const JUNCTIONS := [WORLD_H * 0.2, WORLD_H * 0.4, WORLD_H * 0.61, WORLD_H * 0.81]
+const CONNECTOR_XS := [300.0, WORLD_W - 300.0]
 const LAKE_Y := WORLD_H * 0.53
 const MOUNTAIN_Y := 260.0
 const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a"), Color("805b73"), Color("b77945")]
@@ -70,6 +76,11 @@ var _sb: StyleBoxFlat
 var _walker_variant := 0
 var _weather := 0
 var _clouds: Array = []
+var _neighbors: Array = []
+var _pet_stations: Array = []
+## -1 = left sidewalk, 0 = road center, 1 = right sidewalk.
+var _main_lane := 1
+var _lane_switch_ready := true
 
 
 func _ready() -> void:
@@ -101,6 +112,15 @@ func _ready() -> void:
 	for k in 7:
 		_clouds.append({"x": rng.randf_range(-100.0, 700.0), "y": rng.randf_range(30.0, 360.0),
 				"speed": rng.randf_range(5.0, 13.0), "scale": rng.randf_range(0.7, 1.35)})
+	for k in 8:
+		_neighbors.append({"route": k % 3, "seed": rng.randf_range(0.0, WORLD_H),
+				"speed": rng.randf_range(22.0, 42.0), "side": -1 if k % 2 == 0 else 1,
+				"tone": k % 4, "dog": k in [1, 4, 7]})
+	_pet_stations = [
+		{"x": CONNECTOR_XS[0] - SIDEWALK_CENTER - 25.0, "y": (JUNCTIONS[0] + JUNCTIONS[1]) * 0.5},
+		{"x": CONNECTOR_XS[1] + SIDEWALK_CENTER + 25.0, "y": (JUNCTIONS[2] + JUNCTIONS[3]) * 0.5},
+		{"x": _road_x(JUNCTIONS[2]) + SIDEWALK_CENTER + 24.0, "y": JUNCTIONS[2] + 220.0},
+	]
 	GameState.stats_changed.connect(_sync_mood)
 	_sync_mood()
 
@@ -140,8 +160,11 @@ func set_day(pins: Dictionary, grass: Array, completed := 0, saved_position = nu
 	if saved_position is Vector2 and saved_position.y >= 0.0:
 		_player_y = clampf(saved_position.y, 140.0, WORLD_H - 140.0)
 		_player_x = saved_position.x if saved_position.x >= 0.0 else _road_x(_player_y)
+		var offset := _player_x - _road_x(_player_y)
+		_main_lane = 0 if absf(offset) < ROAD_HALF else (-1 if offset < 0.0 else 1)
 	else:
-		_player_x = _road_x(_player_y)
+		_main_lane = 1
+		_player_x = _road_x(_player_y) + SIDEWALK_CENTER
 	_update_dusk()
 
 
@@ -231,23 +254,35 @@ func _process(delta: float) -> void:
 	if move.length() > DEADZONE:
 		var strength := (move.length() - DEADZONE) / (1.0 - DEADZONE)
 		var velocity := move.normalized() * WALK_SPEED * strength
-		_player_y = clampf(_player_y + velocity.y * delta, 140.0, WORLD_H - 140.0)
-		_player_x += velocity.x * delta
-		var road_center := _road_x(_player_y)
+		var previous := Vector2(_player_x, _player_y)
+		var candidate := previous + velocity * delta
+		candidate.y = clampf(candidate.y, 140.0, WORLD_H - 140.0)
+		var road_center := _road_x(candidate.y)
 		var closest_junction := float(JUNCTIONS[0])
 		for junction in JUNCTIONS:
-			if absf(_player_y - float(junction)) < absf(_player_y - closest_junction):
+			if absf(candidate.y - float(junction)) < absf(candidate.y - closest_junction):
 				closest_junction = float(junction)
-		var on_side_street := absf(_player_x - road_center) > ROAD_HALF + WALK_W and absf(_player_y - closest_junction) < 150.0
-		if on_side_street:
-			_player_y = clampf(_player_y, closest_junction - ROAD_HALF - WALK_W * 0.65,
+		var connector_x := _closest_connector(candidate.x)
+		var on_connector := absf(candidate.x - connector_x) < ROAD_HALF + WALK_W and candidate.y > float(JUNCTIONS[0]) - 120.0 and candidate.y < float(JUNCTIONS[3]) + 120.0
+		var on_side_street := absf(candidate.x - road_center) > ROAD_HALF + WALK_W and absf(candidate.y - closest_junction) < 150.0
+		if on_connector and absf(candidate.y - closest_junction) >= 115.0:
+			candidate.x = clampf(candidate.x, connector_x - ROAD_HALF - WALK_W * 0.72,
+					connector_x + ROAD_HALF + WALK_W * 0.72)
+		elif on_side_street:
+			candidate.y = clampf(candidate.y, closest_junction - ROAD_HALF - WALK_W * 0.65,
 					closest_junction + ROAD_HALF + WALK_W * 0.65)
-			_player_x = clampf(_player_x, 120.0, WORLD_W - 120.0)
-		elif absf(_player_y - closest_junction) < 115.0:
-			_player_x = clampf(_player_x, 120.0, WORLD_W - 120.0)
+			candidate.x = clampf(candidate.x, 120.0, WORLD_W - 120.0)
+		elif absf(candidate.y - closest_junction) < 115.0:
+			# The intersection is the only free-turn area. Moving beyond its outer
+			# sidewalk enters a side street instead of being clamped to the main road.
+			candidate.x = clampf(candidate.x, 120.0, WORLD_W - 120.0)
 		else:
-			_player_x = clampf(_player_x, road_center - ROAD_HALF - WALK_W * 0.72,
-					road_center + ROAD_HALF + WALK_W * 0.72)
+			_update_main_lane(move.x)
+			var target_x := road_center + float(_main_lane) * SIDEWALK_CENTER
+			candidate.x = move_toward(previous.x, target_x, LATERAL_SNAP_SPEED * delta)
+		candidate = _keep_clear_of_cars(previous, candidate)
+		_player_x = candidate.x
+		_player_y = candidate.y
 		_face = velocity.angle() + PI * 0.5
 		_phase += delta * 10.0 * strength
 		_moving = true
@@ -264,6 +299,43 @@ func _process(delta: float) -> void:
 			best = d
 			_near = i
 	queue_redraw()
+
+
+func _closest_connector(x: float) -> float:
+	return float(CONNECTOR_XS[0]) if absf(x - float(CONNECTOR_XS[0])) < absf(x - float(CONNECTOR_XS[1])) else float(CONNECTOR_XS[1])
+
+
+func _update_main_lane(horizontal_input: float) -> void:
+	if absf(horizontal_input) < 0.25:
+		_lane_switch_ready = true
+		return
+	if not _lane_switch_ready or absf(horizontal_input) < LANE_SWITCH_INPUT:
+		return
+	if _main_lane != 0 and signf(horizontal_input) == -float(_main_lane):
+		# An intentional push toward the street moves from the sidewalk to its center.
+		_main_lane = 0
+		_lane_switch_ready = false
+	elif _main_lane == 0:
+		# An intentional push away from the center selects that side's sidewalk.
+		_main_lane = -1 if horizontal_input < 0.0 else 1
+		_lane_switch_ready = false
+
+
+func _keep_clear_of_cars(previous: Vector2, candidate: Vector2) -> Vector2:
+	for car in _cars:
+		var car_pos := Vector2(_road_x(float(car.y)) + int(car.side) * (ROAD_HALF - 24.0), float(car.y))
+		if absf(candidate.x - car_pos.x) >= CAR_CLEAR_X or absf(candidate.y - car_pos.y) >= CAR_CLEAR_Y:
+			continue
+		# Slide along the car on the axis that was already clear. If loading an old
+		# save inside a car, move the walker to the nearest safe side immediately.
+		if absf(previous.x - car_pos.x) >= CAR_CLEAR_X:
+			candidate.x = previous.x
+		elif absf(previous.y - car_pos.y) >= CAR_CLEAR_Y:
+			candidate.y = previous.y
+		else:
+			var side := -1.0 if previous.x <= car_pos.x else 1.0
+			candidate.x = car_pos.x + side * CAR_CLEAR_X
+	return candidate
 
 
 func _on_screen(wy: float, margin := 260.0) -> bool:
@@ -291,6 +363,7 @@ func _draw() -> void:
 	var cx := w * 0.5
 	_draw_ground(w, h, cx)
 	_draw_ambience(w, h)
+	_draw_pet_stations()
 	for car in _cars:
 		if _on_screen(car.y):
 			_draw_car(_road_x(car.y) - _cam_x + car.side * (ROAD_HALF - 24.0), car.y - _cam, car.col)
@@ -318,6 +391,7 @@ func _draw() -> void:
 		if _on_screen(house_y(i), 320.0):
 			_draw_highlight(i)
 			_draw_pin(i)
+	_draw_neighbors()
 	_draw_walker(Vector2(_player_x - _cam_x, _player_y - _cam))
 	if _dusk > 0.0:
 		draw_rect(Rect2(0, 0, w, h), Color(0.12, 0.1, 0.32, 0.4 * _dusk))
@@ -337,6 +411,19 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 	_draw_landmarks(w, h)
 	var road := Color("3a4152").lerp(Color("22263a"), _dusk * 0.6)
 	var walk := Color("d9dde3").lerp(Color("8f8aa8"), _dusk * 0.6)
+	# Two parallel neighborhood avenues connect the cross streets into a real
+	# street network, with roundabouts at alternating junctions.
+	var top_y := float(JUNCTIONS[0]) - ROAD_HALF - WALK_W
+	var bottom_y := float(JUNCTIONS[3]) + ROAD_HALF + WALK_W
+	for connector in CONNECTOR_XS:
+		var sx: float = float(connector) - _cam_x
+		draw_rect(Rect2(sx - ROAD_HALF - WALK_W, top_y - _cam, WALK_W, bottom_y - top_y), walk)
+		draw_rect(Rect2(sx - ROAD_HALF, top_y - _cam, ROAD_HALF * 2.0, bottom_y - top_y), road)
+		draw_rect(Rect2(sx + ROAD_HALF, top_y - _cam, WALK_W, bottom_y - top_y), walk)
+		var dash_y := top_y + 30.0
+		while dash_y < bottom_y:
+			draw_line(Vector2(sx, dash_y - _cam), Vector2(sx, dash_y + 42.0 - _cam), Color("ffe08a", 0.7), 4.0)
+			dash_y += 88.0
 	for junction in JUNCTIONS:
 		var sy: float = float(junction) - _cam
 		if sy > -100.0 and sy < h + 100.0:
@@ -345,6 +432,13 @@ func _draw_ground(w: float, h: float, cx: float) -> void:
 			draw_rect(Rect2(-_cam_x, sy + ROAD_HALF, WORLD_W, WALK_W), walk)
 			for wx in range(0, int(WORLD_W), 90):
 				draw_line(Vector2(wx - _cam_x, sy), Vector2(wx + 44.0 - _cam_x, sy), Color("ffe08a", 0.7), 4.0)
+	for connector_i in CONNECTOR_XS.size():
+		for junction_i in range(connector_i, JUNCTIONS.size(), 2):
+			var circle_c := Vector2(float(CONNECTOR_XS[connector_i]) - _cam_x, float(JUNCTIONS[junction_i]) - _cam)
+			draw_circle(circle_c, 88.0, walk)
+			draw_circle(circle_c, 66.0, road)
+			draw_circle(circle_c, 25.0, Color("4f9b64").lerp(Color("274c42"), _dusk * 0.6))
+			draw_circle(circle_c, 31.0, Color("d9dde3"), false, 5.0)
 	_draw_road_band(-ROAD_HALF - WALK_W, ROAD_HALF + WALK_W, walk, h)
 	_draw_road_band(-ROAD_HALF, ROAD_HALF, road, h)
 	k = int(floor(_cam / 80.0))
@@ -426,10 +520,92 @@ func _draw_road_band(left: float, right: float, color: Color, h: float) -> void:
 
 
 func _draw_car(x: float, y: float, col: Color) -> void:
-	_rr(Rect2(x - 20.0 + 5.0, y - 43.0 + 6.0, 40.0, 86.0), Color(0, 0, 0, 0.2), 12)
-	_rr(Rect2(x - 20.0, y - 43.0, 40.0, 86.0), col.lerp(Color("111522"), _dusk * 0.4), 12)
-	_rr(Rect2(x - 15.0, y - 24.0, 30.0, 16.0), Color("cfe9ff").lerp(Color("39455f"), _dusk * 0.6), 5)
-	_rr(Rect2(x - 15.0, y + 12.0, 30.0, 12.0), Color("cfe9ff").lerp(Color("39455f"), _dusk * 0.6), 5)
+	var body := col.lerp(Color("111522"), _dusk * 0.4)
+	var glass := Color("bfe2f5").lerp(Color("303b55"), _dusk * 0.65)
+	# Offset shadow, visible tires, tapered hood/trunk, and a raised cabin make
+	# the parked cars read as small 3D objects instead of flat rectangles.
+	_ellipse(Vector2(x + 7.0, y + 8.0), 29.0, 49.0, Color(0, 0, 0, 0.24))
+	_rr(Rect2(x - 27.0, y - 29.0, 8.0, 22.0), Color("171b24"), 3)
+	_rr(Rect2(x + 19.0, y - 29.0, 8.0, 22.0), Color("171b24"), 3)
+	_rr(Rect2(x - 27.0, y + 12.0, 8.0, 22.0), Color("171b24"), 3)
+	_rr(Rect2(x + 19.0, y + 12.0, 8.0, 22.0), Color("171b24"), 3)
+	draw_colored_polygon(PackedVector2Array([
+			Vector2(x - 21.0, y - 45.0), Vector2(x + 21.0, y - 45.0),
+			Vector2(x + 25.0, y - 31.0), Vector2(x + 25.0, y + 33.0),
+			Vector2(x + 20.0, y + 45.0), Vector2(x - 20.0, y + 45.0),
+			Vector2(x - 25.0, y + 33.0), Vector2(x - 25.0, y - 31.0)]), body.darkened(0.12))
+	_rr(Rect2(x - 21.0, y - 39.0, 42.0, 77.0), body, 11)
+	# Raised roof/cabin with shaded sides and separate front/rear glass.
+	_rr(Rect2(x - 17.0, y - 25.0, 34.0, 48.0), body.lightened(0.16), 8)
+	draw_colored_polygon(PackedVector2Array([
+			Vector2(x - 17.0, y - 23.0), Vector2(x - 13.0, y - 17.0),
+			Vector2(x - 13.0, y + 17.0), Vector2(x - 17.0, y + 22.0)]), body.darkened(0.16))
+	_rr(Rect2(x - 13.0, y - 20.0, 26.0, 15.0), glass, 4)
+	_rr(Rect2(x - 13.0, y + 7.0, 26.0, 12.0), glass.darkened(0.08), 4)
+	draw_line(Vector2(x - 16.0, y - 34.0), Vector2(x + 13.0, y - 34.0), body.lightened(0.38), 2.0, true)
+	draw_circle(Vector2(x - 14.0, y - 39.0), 3.0, Color("fff1b0"))
+	draw_circle(Vector2(x + 14.0, y - 39.0), 3.0, Color("fff1b0"))
+	draw_circle(Vector2(x - 14.0, y + 38.0), 2.8, Color("d94b45"))
+	draw_circle(Vector2(x + 14.0, y + 38.0), 2.8, Color("d94b45"))
+
+
+func _draw_pet_stations() -> void:
+	for station in _pet_stations:
+		var p := Vector2(float(station.x) - _cam_x, float(station.y) - _cam)
+		if p.y < -80.0 or p.y > size.y + 80.0:
+			continue
+		_ellipse(p + Vector2(5.0, 8.0), 18.0, 10.0, Color(0, 0, 0, 0.18))
+		draw_rect(Rect2(p + Vector2(-4.0, -32.0), Vector2(8.0, 42.0)), Color("52616f"))
+		_rr(Rect2(p + Vector2(-16.0, -48.0), Vector2(32.0, 28.0)), Color("2f9e57"), 5)
+		draw_circle(p + Vector2(0.0, -34.0), 6.0, Color.WHITE, false, 2.0)
+		draw_circle(p + Vector2(-5.0, 12.0), 8.0, Color("72bde0"))
+		draw_string(ThemeDB.fallback_font, p + Vector2(-14.0, -28.0), "PET", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color.WHITE)
+
+
+func _draw_neighbors() -> void:
+	var route_top := float(JUNCTIONS[0])
+	var route_span := float(JUNCTIONS[3]) - route_top
+	for neighbor in _neighbors:
+		var route := int(neighbor.route)
+		var wy: float
+		var wx: float
+		if route == 0:
+			wy = fposmod(float(neighbor.seed) + _time * float(neighbor.speed), WORLD_H - 280.0) + 140.0
+			wx = _road_x(wy) + int(neighbor.side) * SIDEWALK_CENTER
+		else:
+			wy = route_top + fposmod(float(neighbor.seed) + _time * float(neighbor.speed), route_span)
+			wx = float(CONNECTOR_XS[route - 1]) + int(neighbor.side) * SIDEWALK_CENTER
+		if not _on_screen(wy, 100.0):
+			continue
+		var p := Vector2(wx - _cam_x, wy - _cam)
+		_draw_neighbor(p, int(neighbor.tone), float(neighbor.speed))
+		if bool(neighbor.dog):
+			var dog_side := float(neighbor.side)
+			var dog_p := p + Vector2(25.0 * dog_side, 24.0)
+			draw_line(p + Vector2(7.0 * dog_side, 3.0), dog_p + Vector2(0.0, -5.0), Color("7b5a3b"), 2.0)
+			_draw_dog(dog_p, int(neighbor.tone))
+
+
+func _draw_neighbor(p: Vector2, tone: int, speed: float) -> void:
+	var bob := sin(_time * speed * 0.12 + p.y * 0.02) * 2.0
+	var shirts := [Color("e05a47"), Color("477bd1"), Color("e6ad3b"), Color("8c5fa8")]
+	var shirt: Color = shirts[tone]
+	var skin: Color = [Color("f2c29b"), Color("9b6547"), Color("d89b73"), Color("6f4635")][tone]
+	_ellipse(p + Vector2(3.0, 11.0), 10.0, 7.0, Color(0, 0, 0, 0.16))
+	draw_line(p + Vector2(-5.0, 7.0), p + Vector2(-7.0, 17.0 + bob), Color("253044"), 4.0, true)
+	draw_line(p + Vector2(5.0, 7.0), p + Vector2(7.0, 17.0 - bob), Color("253044"), 4.0, true)
+	_ellipse(p, 10.0, 13.0, shirt)
+	draw_circle(p + Vector2(0.0, -13.0), 7.0, skin)
+
+
+func _draw_dog(p: Vector2, tone: int) -> void:
+	var fur: Color = [Color("c78a4b"), Color("e7d2aa"), Color("6b4a34"), Color("b6a39a")][tone]
+	_ellipse(p, 11.0, 7.0, fur)
+	draw_circle(p + Vector2(10.0, -4.0), 6.0, fur.lightened(0.08))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(7.0, -8.0), p + Vector2(5.0, -15.0), p + Vector2(11.0, -9.0)]), fur.darkened(0.18))
+	draw_line(p + Vector2(-8.0, 3.0), p + Vector2(-13.0, 10.0), fur.darkened(0.15), 3.0, true)
+	draw_line(p + Vector2(7.0, 3.0), p + Vector2(9.0, 10.0), fur.darkened(0.15), 3.0, true)
+	draw_line(p + Vector2(-10.0, -2.0), p + Vector2(-15.0, -9.0), fur, 3.0, true)
 
 
 func _yard_rect(i: int) -> Rect2:

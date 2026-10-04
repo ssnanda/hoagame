@@ -13,6 +13,7 @@ var _drag_start_x := 0.0
 var _locked := false
 var _who: Label
 var _body: Label
+var _case_details: Label
 var _hint: Label
 var _left_btn: Button
 var _right_btn: Button
@@ -51,6 +52,9 @@ func _ready() -> void:
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_body)
 
+	_case_details = _make_label(22, Color("425466"))
+	box.add_child(_case_details)
+
 	var divider := HSeparator.new()
 	box.add_child(divider)
 	var choices := HBoxContainer.new()
@@ -70,6 +74,13 @@ func setup(card_data: Dictionary, pos: Vector2) -> void:
 	position = pos
 	_who.text = str(data.get("who", ""))
 	_body.text = str(data.get("text", ""))
+	var details: Array = []
+	if data.has("rule"):
+		details.append("RULE  %s" % str(data.rule))
+	if data.has("evidence"):
+		details.append("EVIDENCE  %s" % str(data.evidence))
+	_case_details.text = "\n".join(details)
+	_case_details.visible = not details.is_empty()
 	_left_btn.text = str(data.get("left", {}).get("label", "LET IT GO"))
 	_right_btn.text = str(data.get("right", {}).get("label", "FLAG IT"))
 

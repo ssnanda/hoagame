@@ -124,5 +124,77 @@
     "text": "The community garden contains tomatoes taller than the approved shrub line.",
     "left": {"label": "Harvest them", "effects": {"happiness": 11, "power": -6}},
     "right": {"label": "Trim tomatoes", "effects": {"power": 8, "happiness": -9}}
+  },
+  {
+    "id": "rv_hardship",
+    "who": "Compliance Committee",
+    "text": "An RV has occupied a driveway for nine days. The owner is housing family displaced by a flooded apartment, but its slide-out blocks part of the sidewalk.",
+    "rule": "RVs: 72 hours maximum; sidewalks must remain clear.",
+    "evidence": "Dated photos confirm nine days. Emergency housing letter is valid.",
+    "left": {"label": "7-day exception", "effects": {"happiness": 10, "power": -5, "budget": -2}},
+    "right": {"label": "Fine and tow", "effects": {"budget": 12, "power": 10, "happiness": -18}}
+  },
+  {
+    "id": "drainage_project",
+    "who": "Lot 22 and Lot 24",
+    "text": "A new retaining wall is approved and attractive, but redirects stormwater into the neighbor's yard during heavy rain.",
+    "rule": "Approved work cannot alter drainage onto another lot.",
+    "evidence": "Permit passed design review; engineer confirms harmful runoff.",
+    "left": {"label": "Require drainage fix", "effects": {"power": 9, "happiness": 4, "budget": -5}},
+    "right": {"label": "Approval stands", "effects": {"power": -9, "happiness": -12, "budget": 3}}
+  },
+  {
+    "id": "home_business",
+    "who": "Three Nearby Residents",
+    "text": "A home bakery makes six morning deliveries a day. It creates jobs and excellent muffins, plus one delivery van occasionally blocks a fire lane.",
+    "rule": "Home businesses allowed; commercial traffic cannot obstruct access.",
+    "evidence": "Traffic log: 31 compliant deliveries, 3 fire-lane obstructions.",
+    "left": {"label": "Traffic plan + warning", "effects": {"happiness": 9, "power": 6, "budget": -3}},
+    "right": {"label": "Revoke permission", "effects": {"power": 12, "happiness": -16, "budget": 4}}
+  },
+  {
+    "id": "tree_roots",
+    "who": "Landscape and Safety Committees",
+    "text": "A protected oak lifts the sidewalk two inches. Removing it violates the canopy plan; leaving it creates a trip hazard.",
+    "rule": "Heritage trees protected; HOA must maintain safe common paths.",
+    "evidence": "Arborist says root-friendly rerouting preserves the tree but costs $3,200.",
+    "left": {"label": "Reroute sidewalk", "effects": {"budget": -14, "happiness": 12, "power": 5}},
+    "right": {"label": "Remove the oak", "effects": {"budget": -5, "power": 8, "happiness": -14}}
+  },
+  {
+    "id": "ev_charger",
+    "who": "Architectural Review",
+    "text": "A resident installed an EV charger without approval. The electrical permit is valid, but its bright cable crosses a shared walkway.",
+    "rule": "Chargers are protected improvements; common paths must stay unobstructed.",
+    "evidence": "Licensed installation. Cable cover fails accessibility clearance.",
+    "left": {"label": "Approve with relocation", "effects": {"happiness": 10, "power": 7, "budget": -2}},
+    "right": {"label": "Removal order", "effects": {"power": 11, "happiness": -15, "budget": 3}}
+  },
+  {
+    "id": "dog_station",
+    "who": "Pet Committee",
+    "text": "The busiest dog-walking loop has no waste station. Complaints are rising, but the proposed station sits beside Linda's prized roses.",
+    "rule": "Common areas must provide sanitation without creating a nuisance.",
+    "evidence": "Usage survey favors the site; alternate location adds $900 in path work.",
+    "left": {"label": "Build at alternate site", "effects": {"budget": -11, "happiness": 12, "power": 3}},
+    "right": {"label": "Use proposed site", "effects": {"budget": -5, "happiness": 4, "power": 7}}
+  },
+  {
+    "id": "short_term_rental",
+    "who": "Board Hearing",
+    "text": "A homeowner rented for three weekends while caring for a parent out of state. Guests were quiet, but rentals under 30 days are prohibited.",
+    "rule": "Minimum lease: 30 days. Hardship waivers require advance approval.",
+    "evidence": "Door-camera dates verified; no noise or parking complaints.",
+    "left": {"label": "Retroactive warning", "effects": {"happiness": 8, "power": -3, "budget": -2}},
+    "right": {"label": "Three separate fines", "effects": {"budget": 16, "power": 10, "happiness": -17}}
+  },
+  {
+    "id": "solar_battery",
+    "who": "Fire Marshal and ARC",
+    "text": "A permitted home battery is screened from view, but the screening hedge reduces required emergency clearance by eight inches.",
+    "rule": "Energy equipment allowed; fire clearance overrides landscaping rules.",
+    "evidence": "Battery permit valid. Fire marshal requests hedge trimming, not removal.",
+    "left": {"label": "Trim and approve", "effects": {"happiness": 9, "power": 8, "budget": -2}},
+    "right": {"label": "Remove battery", "effects": {"power": 7, "happiness": -16, "budget": 5}}
   }
 ]
