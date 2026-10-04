@@ -1,28 +1,26 @@
 extends Control
-## Side-scrolling neighborhood. Tap or drag to walk; tap a house with a pin
-## to walk there and emit `visit`. Sky runs morning -> dusk as the day's pins are cleared.
+## Top-down vertical street. Hold a thumb anywhere (bottom-right works) and drag up/down
+## to walk; houses glow as you pass, release to inspect the glowing one.
 
 signal visit(house: int)
 
 const HOUSE_COUNT := 6
-const HOUSE_SPACING := 640.0
-const HOUSE_MARGIN := 420.0
-const WORLD_W := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (HOUSE_COUNT - 1)
-const HOUSE_W := 220.0
-const HOUSE_K := 2.2
-const WALKER_K := 1.5
-const WALK_SPEED := 320.0
-const LAWN_H := 34.0
-const WALK_H := 90.0
-const BLADES := 36
-const INCH_PX := 11.0
-const FAR_PERIOD := 1400.0
-const SKY_DAY_TOP := Color("5fb4f0")
-const SKY_DAY_BOTTOM := Color("d8f0ff")
-const SKY_DUSK_TOP := Color("3b2f6b")
-const SKY_DUSK_BOTTOM := Color("ff9d6c")
-const SUIT := Color("23304a")
-const SKIN := Color("f2c29b")
+const HOUSE_SPACING := 440.0
+const HOUSE_MARGIN := 520.0
+const WORLD_H := HOUSE_MARGIN * 2.0 + HOUSE_SPACING * (HOUSE_COUNT - 1)
+const ROAD_HALF := 70.0
+const WALK_W := 46.0
+const HOUSE_W := 150.0
+const HOUSE_D := 170.0
+const YARD_GAP := 80.0
+const WALK_SPEED := 380.0
+const STICK_RANGE := 110.0
+const DEADZONE := 0.12
+const NEAR_DIST := 120.0
+const TUFTS := 46
+const INCH_PX := 4.5
+const WALKER_K := 1.4
+const ROOFS := [Color("c4543e"), Color("5b6f8f"), Color("8a6f56"), Color("4f7f6a")]
 const QUIPS := [
 	"No complaints here. Suspicious.",
 	"Everything's up to code.",
@@ -31,58 +29,73 @@ const QUIPS := [
 	"Nice flamingo. Compliant.",
 ]
 
-var _player_x := 260.0
-var _target_x := 260.0
-var _facing := 1.0
-var _walking := false
-var _phase := 0.0
+var _player_y := WORLD_H - 260.0
 var _cam := 0.0
+var _stick := 0.0
+var _anchor := Vector2.ZERO
+var _finger := Vector2.ZERO
+var _dragging := false
+var _used := false
+var _angle := 0.0
+var _face := 0.0
+var _phase := 0.0
 var _time := 0.0
+var _near := -1
+var _moving := false
 var _dusk := 0.0
 var _gloom := 0.0
-var _dragging := false
-var _want_visit := -1
 var _pins: Dictionary = {}
 var _grass: Array = []
 var _day_total := 1
 var _day_done := 0
-var _far: Array = []
 var _houses: Array = []
-var _blades: Array = []
+var _tufts: Array = []
+var _trees: Array = []
+var _cars: Array = []
 var _bubble := ""
 var _bubble_t := 0.0
-var _ground_y := 400.0
 var _dusk_tween: Tween
-var _bubble_style: StyleBoxFlat
+var _sb: StyleBoxFlat
 
 
 func _ready() -> void:
 	clip_contents = true
+	_sb = StyleBoxFlat.new()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	var x := 0.0
-	while x < FAR_PERIOD:
-		var w := rng.randf_range(70.0, 150.0)
-		_far.append({"x": x, "w": w, "h": rng.randf_range(80.0, 230.0), "c": rng.randf()})
-		x += w + rng.randf_range(0.0, 24.0)
+	rng.seed = 11
 	for i in HOUSE_COUNT:
-		_houses.append({"h": rng.randf_range(95.0, 135.0), "hue": rng.randf(), "kind": i % 3})
+		_houses.append({"roof": ROOFS[i % ROOFS.size()], "kind": i % 3})
 		_grass.append(3.0)
-	for j in BLADES:
-		_blades.append({"x": ((j + rng.randf_range(0.1, 0.9)) / BLADES - 0.5) * HOUSE_W,
-				"h": rng.randf_range(0.8, 1.0)})
-	_blades[BLADES / 2].h = 1.0
-	_bubble_style = StyleBoxFlat.new()
-	_bubble_style.bg_color = Color.WHITE
-	_bubble_style.set_corner_radius_all(14)
-	_bubble_style.shadow_size = 6
-	_bubble_style.shadow_color = Color(0, 0, 0, 0.25)
+	for j in TUFTS:
+		_tufts.append({"x": rng.randf(), "y": rng.randf(), "h": rng.randf_range(0.6, 1.0), "a": rng.randf_range(-0.3, 0.3)})
+	for side in [-1, 1]:
+		var y := 120.0
+		while y < WORLD_H:
+			var blocked := false
+			for i in HOUSE_COUNT:
+				if _side(i) == side and absf(y - house_y(i)) < 150.0:
+					blocked = true
+			if not blocked:
+				_trees.append({"side": side, "y": y, "off": rng.randf_range(16.0, 140.0), "r": rng.randf_range(24.0, 42.0)})
+			y += rng.randf_range(150.0, 230.0)
+	var car_cols := [Color("e0533d"), Color("3a6fd8"), Color("f2b632"), Color("e8e8ee"), Color("2f9e57")]
+	for k in 9:
+		_cars.append({"y": rng.randf_range(200.0, WORLD_H - 200.0), "side": -1 if k % 2 == 0 else 1,
+				"col": car_cols[rng.randi() % car_cols.size()]})
 	GameState.stats_changed.connect(_sync_mood)
 	_sync_mood()
 
 
-func house_x(i: int) -> float:
-	return HOUSE_MARGIN + i * HOUSE_SPACING
+func house_y(i: int) -> float:
+	return WORLD_H - HOUSE_MARGIN - i * HOUSE_SPACING
+
+
+func _side(i: int) -> int:
+	return -1 if i % 2 == 0 else 1
+
+
+func _house_c(i: int) -> Vector2:
+	return Vector2(size.x * 0.5 + _side(i) * (ROAD_HALF + WALK_W + YARD_GAP + HOUSE_W * 0.5), house_y(i))
 
 
 ## pins: house index -> "lawn" | "card". grass: tall-grass height in inches per house.
@@ -91,7 +104,6 @@ func set_day(pins: Dictionary, grass: Array) -> void:
 	_grass = grass.duplicate()
 	_day_total = maxi(pins.size(), 1)
 	_day_done = 0
-	_want_visit = -1
 	_update_dusk()
 
 
@@ -116,260 +128,299 @@ func _sync_mood() -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		_dragging = event.pressed
 		if event.pressed:
-			_press(event.position)
-	elif event is InputEventMouseMotion and _dragging and _want_visit < 0:
-		_target_x = clampf(_cam + event.position.x, 80.0, WORLD_W - 80.0)
+			_dragging = true
+			_used = true
+			_anchor = event.position
+			_finger = event.position
+			_stick = 0.0
+		else:
+			_dragging = false
+			_stick = 0.0
+			_enter_near()
+	elif event is InputEventMouseMotion and _dragging:
+		_finger = event.position
+		_stick = clampf((_finger.y - _anchor.y) / STICK_RANGE, -1.0, 1.0)
 
 
-func _press(pos: Vector2) -> void:
-	var wx := _cam + pos.x
-	_want_visit = -1
-	_target_x = clampf(wx, 80.0, WORLD_W - 80.0)
-	if pos.y > _ground_y + 40.0:
+func _enter_near() -> void:
+	if _near < 0:
 		return
-	for i in HOUSE_COUNT:
-		if absf(wx - house_x(i)) < HOUSE_W * HOUSE_K * 0.5:
-			_want_visit = i
-			_target_x = house_x(i)
-			return
-
-
-func _process(delta: float) -> void:
-	_time += delta
-	_bubble_t = maxf(0.0, _bubble_t - delta)
-	var dist := _target_x - _player_x
-	if absf(dist) > 4.0:
-		_walking = true
-		_facing = signf(dist)
-		_player_x += _facing * minf(WALK_SPEED * delta, absf(dist))
-		_phase += delta * 9.0
-	else:
-		_walking = false
-		if _want_visit >= 0:
-			_arrive()
-	var want_cam := clampf(_player_x - size.x * 0.4, 0.0, maxf(0.0, WORLD_W - size.x))
-	_cam = lerpf(_cam, want_cam, 1.0 - exp(-8.0 * delta))
-	queue_redraw()
-
-
-func _arrive() -> void:
-	var i := _want_visit
-	_want_visit = -1
-	var kind: String = _pins.get(i, "")
+	var kind: String = _pins.get(_near, "")
 	if kind == "lawn" or kind == "card":
-		visit.emit(i)
+		visit.emit(_near)
 	else:
 		_bubble = "Case closed." if kind == "done" else QUIPS[randi() % QUIPS.size()]
 		_bubble_t = 2.2
 
 
+func _process(delta: float) -> void:
+	_time += delta
+	_bubble_t = maxf(0.0, _bubble_t - delta)
+	var s := _stick
+	if not _dragging:
+		s = Input.get_axis("ui_up", "ui_down")
+		if Input.is_action_just_pressed("ui_accept"):
+			_enter_near()
+	if absf(s) > DEADZONE:
+		var v := (absf(s) - DEADZONE) / (1.0 - DEADZONE) * signf(s)
+		_player_y = clampf(_player_y + v * WALK_SPEED * delta, 140.0, WORLD_H - 140.0)
+		_face = PI if v > 0.0 else 0.0
+		_phase += delta * 10.0 * absf(v)
+		_moving = true
+	else:
+		_moving = false
+	_angle = lerp_angle(_angle, _face, 1.0 - exp(-12.0 * delta))
+	_cam = clampf(_player_y - size.y * 0.58, 0.0, maxf(0.0, WORLD_H - size.y))
+	_near = -1
+	var best := NEAR_DIST
+	for i in HOUSE_COUNT:
+		var d := absf(_player_y - house_y(i))
+		if d < best:
+			best = d
+			_near = i
+	queue_redraw()
+
+
+func _on_screen(wy: float, margin := 260.0) -> bool:
+	var sy := wy - _cam
+	return sy > -margin and sy < size.y + margin
+
+
+func _rr(rect: Rect2, color: Color, radius: int) -> void:
+	_sb.bg_color = color
+	_sb.set_corner_radius_all(radius)
+	draw_style_box(_sb, rect)
+
+
+func _ellipse(c: Vector2, rx: float, ry: float, color: Color) -> void:
+	var pts := PackedVector2Array()
+	for k in 24:
+		var a := TAU * k / 24.0
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+	draw_colored_polygon(pts, color)
+
+
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
-	_ground_y = maxf(h - 260.0, 320.0)
-	_draw_sky(w)
-	_draw_far(w)
-	_draw_ground(w, h)
-	_draw_houses(w)
-	_draw_pins(w)
-	_draw_car(w, h)
-	_draw_walker()
+	var cx := w * 0.5
+	_draw_ground(w, h, cx)
+	for car in _cars:
+		if _on_screen(car.y):
+			_draw_car(cx + car.side * (ROAD_HALF - 24.0), car.y - _cam, car.col)
+	for i in HOUSE_COUNT:
+		if _on_screen(house_y(i), 320.0):
+			_draw_yard(i)
+	var sh := Vector2(18.0, 22.0) * (1.0 + _dusk * 1.2)
+	for t in _trees:
+		if _on_screen(t.y):
+			var tc := Vector2(cx + t.side * (ROAD_HALF + WALK_W + t.off + t.r), t.y - _cam)
+			_ellipse(tc + sh * 0.9, t.r, t.r, Color(0, 0, 0, 0.18))
+	for i in HOUSE_COUNT:
+		if _on_screen(house_y(i), 320.0):
+			_draw_house(i, sh)
+	for t in _trees:
+		if _on_screen(t.y):
+			var tc := Vector2(cx + t.side * (ROAD_HALF + WALK_W + t.off + t.r), t.y - _cam)
+			var g := Color("2f9e57").lerp(Color("1c5a3e"), _dusk * 0.7)
+			_ellipse(tc, t.r, t.r, g)
+			_ellipse(tc + Vector2(-t.r * 0.2, -t.r * 0.25), t.r * 0.62, t.r * 0.62, g.lightened(0.12))
+	for i in HOUSE_COUNT:
+		if _on_screen(house_y(i), 320.0):
+			_draw_highlight(i)
+			_draw_pin(i)
+	_draw_walker(Vector2(cx, _player_y - _cam))
+	if _dusk > 0.0:
+		draw_rect(Rect2(0, 0, w, h), Color(0.12, 0.1, 0.32, 0.4 * _dusk))
 	if _gloom > 0.0:
-		draw_rect(Rect2(0, 0, w, h), Color(0.25, 0.27, 0.32, 0.45 * _gloom))
+		draw_rect(Rect2(0, 0, w, h), Color(0.25, 0.27, 0.32, 0.4 * _gloom))
+	_draw_ui(w, h)
 
 
-func _draw_sky(w: float) -> void:
-	var top := SKY_DAY_TOP.lerp(SKY_DUSK_TOP, _dusk)
-	var bottom := SKY_DAY_BOTTOM.lerp(SKY_DUSK_BOTTOM, _dusk)
-	draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, _ground_y), Vector2(0, _ground_y)]),
-			PackedColorArray([top, top, bottom, bottom]))
-	var sun := Vector2(w * 0.75, lerpf(110.0, _ground_y - 90.0, _dusk))
-	var sun_col := Color("fff2b0").lerp(Color("ff7a45"), _dusk)
-	for i in 4:
-		draw_circle(sun, 120.0 - i * 18.0, Color(sun_col, 0.07))
-	draw_circle(sun, 46.0, sun_col)
-	for i in 4:
-		var cx := fposmod(i * 330.0 + _time * (10.0 + i * 3.0) - _cam * 0.05, w + 300.0) - 150.0
-		var cy := 70.0 + i * 55.0
-		var cc := Color(1, 1, 1, lerpf(0.85, 0.25, _dusk))
-		draw_circle(Vector2(cx, cy), 28.0, cc)
-		draw_circle(Vector2(cx + 34.0, cy - 12.0), 36.0, cc)
-		draw_circle(Vector2(cx + 74.0, cy), 28.0, cc)
-		draw_rect(Rect2(cx, cy, 74.0, 28.0), cc)
-
-
-func _draw_far(w: float) -> void:
-	var off := fposmod(_cam * 0.25, FAR_PERIOD)
-	var base := SKY_DAY_BOTTOM.lerp(SKY_DUSK_TOP, 0.35 + 0.4 * _dusk).darkened(0.12)
-	for b in _far:
-		var x: float = b.x - off
-		while x < -b.w:
-			x += FAR_PERIOD
-		while x < w:
-			draw_rect(Rect2(x, _ground_y - b.h, b.w, b.h), base.lerp(Color("7a8fb5"), b.c * 0.4))
-			x += FAR_PERIOD
-
-
-func _draw_ground(w: float, h: float) -> void:
-	var gy := _ground_y
+func _draw_ground(w: float, h: float, cx: float) -> void:
 	var lawn := Color("58c27d").lerp(Color("2c7050"), _dusk * 0.7)
-	draw_rect(Rect2(0, gy - 6.0, w, LAWN_H + 6.0), lawn)
-	var walk_y := gy + LAWN_H
+	draw_rect(Rect2(0, 0, w, h), lawn)
+	var k := int(floor(_cam / 120.0))
+	while k * 120.0 - _cam < h:
+		if k % 2 == 0:
+			draw_rect(Rect2(0, k * 120.0 - _cam, w, 120.0), Color(1, 1, 1, 0.045))
+		k += 1
 	var walk := Color("d9dde3").lerp(Color("8f8aa8"), _dusk * 0.6)
-	draw_rect(Rect2(0, walk_y, w, WALK_H), walk)
-	var joint := 160.0
-	var x := -fposmod(_cam, joint)
-	while x < w:
-		draw_line(Vector2(x, walk_y), Vector2(x - 18.0, walk_y + WALK_H), walk.darkened(0.12), 2.0)
-		x += joint
-	var curb_y := walk_y + WALK_H
-	draw_rect(Rect2(0, curb_y, w, 8.0), walk.lightened(0.15))
+	var inner := ROAD_HALF
+	var outer := ROAD_HALF + WALK_W
+	draw_rect(Rect2(cx - outer, 0, WALK_W, h), walk)
+	draw_rect(Rect2(cx + inner, 0, WALK_W, h), walk)
+	k = int(floor(_cam / 90.0))
+	while k * 90.0 - _cam < h:
+		var jy := k * 90.0 - _cam
+		draw_line(Vector2(cx - outer, jy), Vector2(cx - inner, jy), walk.darkened(0.12), 2.0)
+		draw_line(Vector2(cx + inner, jy), Vector2(cx + outer, jy), walk.darkened(0.12), 2.0)
+		k += 1
 	var road := Color("3a4152").lerp(Color("22263a"), _dusk * 0.6)
-	draw_rect(Rect2(0, curb_y + 8.0, w, h - curb_y - 8.0), road)
-	var dash := 90.0
-	var dx := -fposmod(_cam * 1.3, dash * 2.0)
-	var ly := curb_y + 8.0 + (h - curb_y - 8.0) * 0.6
-	while dx < w:
-		draw_rect(Rect2(dx, ly, dash, 5.0), Color(1, 1, 1, 0.55))
-		dx += dash * 2.0
+	draw_rect(Rect2(cx - inner, 0, inner * 2.0, h), road)
+	draw_rect(Rect2(cx - inner - 4.0, 0, 4.0, h), walk.lightened(0.15))
+	draw_rect(Rect2(cx + inner, 0, 4.0, h), walk.lightened(0.15))
+	draw_rect(Rect2(cx - inner + 8.0, 0, 3.0, h), Color(1, 1, 1, 0.4))
+	draw_rect(Rect2(cx + inner - 11.0, 0, 3.0, h), Color(1, 1, 1, 0.4))
+	k = int(floor(_cam / 80.0))
+	while k * 80.0 - _cam < h:
+		draw_rect(Rect2(cx - 2.0, k * 80.0 - _cam, 4.0, 40.0), Color("ffe08a", 0.7))
+		k += 1
 
 
-func _draw_houses(w: float) -> void:
-	for i in HOUSE_COUNT:
-		var sx := house_x(i) - _cam
-		if sx < -400.0 or sx > w + 400.0:
-			continue
-		draw_set_transform(Vector2(sx, _ground_y), 0.0, Vector2(HOUSE_K, HOUSE_K))
-		_draw_house(_houses[i])
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		_draw_blades(sx, float(_grass[i]))
-	# a few shrubs between houses
-	for i in HOUSE_COUNT - 1:
-		var sx := house_x(i) + HOUSE_SPACING * 0.5 - _cam
-		if sx < -80.0 or sx > w + 80.0:
-			continue
-		var g := Color("3fae6a").lerp(Color("1f5e44"), _dusk * 0.7)
-		draw_circle(Vector2(sx, _ground_y + 4.0), 34.0, g)
-		draw_circle(Vector2(sx + 30.0, _ground_y + 12.0), 24.0, g.lightened(0.1))
+func _draw_car(x: float, y: float, col: Color) -> void:
+	_rr(Rect2(x - 20.0 + 5.0, y - 43.0 + 6.0, 40.0, 86.0), Color(0, 0, 0, 0.2), 12)
+	_rr(Rect2(x - 20.0, y - 43.0, 40.0, 86.0), col.lerp(Color("111522"), _dusk * 0.4), 12)
+	_rr(Rect2(x - 15.0, y - 24.0, 30.0, 16.0), Color("cfe9ff").lerp(Color("39455f"), _dusk * 0.6), 5)
+	_rr(Rect2(x - 15.0, y + 12.0, 30.0, 12.0), Color("cfe9ff").lerp(Color("39455f"), _dusk * 0.6), 5)
 
 
-func _draw_blades(sx: float, inches: float) -> void:
-	var base_y := _ground_y + LAWN_H - 8.0
-	var col := Color("2f9e57").lerp(Color("1c5a3e"), _dusk * 0.7)
-	for b in _blades:
-		var bx: float = sx + b.x * HOUSE_K
-		var bh: float = inches * INCH_PX * b.h
-		var lean := sin(_time * 1.5 + bx * 0.05) * 3.0
-		draw_colored_polygon(PackedVector2Array([
-				Vector2(bx - 5.0, base_y), Vector2(bx + lean, base_y - bh), Vector2(bx + 5.0, base_y)]),
-				col.lightened(float(b.h - 0.8) * 0.6))
+func _yard_rect(i: int) -> Rect2:
+	var cx := size.x * 0.5
+	var x0 := (cx + ROAD_HALF + WALK_W) if _side(i) > 0 else (cx - ROAD_HALF - WALK_W - YARD_GAP)
+	return Rect2(x0, house_y(i) - 100.0 - _cam, YARD_GAP, 200.0)
 
 
-func _draw_house(hs: Dictionary) -> void:
-	var wd := HOUSE_W
-	var ht: float = hs.h
-	var palette := [Color("f4ece1"), Color("cfe3f0"), Color("f2d4cc"), Color("d9e8d2")]
-	var body: Color = palette[int(hs.hue * 4.0) % 4].lerp(Color("5a4f7a"), _dusk * 0.4)
-	var roof := Color("34405e").lerp(Color("231c3c"), _dusk * 0.5)
-	var left := -wd * 0.5
-	var top := -ht
-	draw_rect(Rect2(left - 4.0, -4.0, wd + 8.0, 8.0), Color(0, 0, 0, 0.12))
-	draw_rect(Rect2(left, top, wd, ht), body)
+func _draw_yard(i: int) -> void:
+	var r := _yard_rect(i)
+	var inches: float = _grass[i]
+	var tall := clampf((inches - 3.0) / 7.0, 0.0, 1.0)
+	_rr(r, Color("3f9e60").lerp(Color("b2b04a"), tall * 0.5).lerp(Color("1c5a3e"), _dusk * 0.5), 10)
+	var base := Color("2f9e57").lerp(Color("1c5a3e"), _dusk * 0.7)
+	for t in _tufts:
+		var p := Vector2(r.position.x + 6.0 + t.x * (r.size.x - 12.0), r.position.y + 8.0 + t.y * (r.size.y - 12.0))
+		var len: float = inches * INCH_PX * t.h
+		for a in [-0.55, 0.0, 0.55]:
+			var ang: float = a + t.a + sin(_time * 1.6 + p.y * 0.05) * 0.06
+			draw_line(p, p + Vector2(sin(ang), -cos(ang)) * len, base.lightened(float(t.h) * 0.2 - 0.1), 2.0, true)
+
+
+func _draw_house(i: int, sh: Vector2) -> void:
+	var hs: Dictionary = _houses[i]
+	var c := _house_c(i) - Vector2(0, _cam)
+	var side := _side(i)
+	var rect := Rect2(c.x - HOUSE_W * 0.5, c.y - HOUSE_D * 0.5, HOUSE_W, HOUSE_D)
+	draw_rect(Rect2(rect.position + sh, rect.size), Color(0, 0, 0, 0.2))
+	# porch + path toward the road
+	var inner_x := c.x - side * HOUSE_W * 0.5
+	_rr(Rect2(minf(inner_x, inner_x - side * 34.0), c.y - 18.0, 34.0, 36.0), Color("d8c6a3").lerp(Color("6c6280"), _dusk * 0.5), 4)
+	var roof: Color = hs.roof
+	roof = roof.lerp(Color("231c3c"), _dusk * 0.35)
 	if hs.kind == 1:
-		draw_rect(Rect2(left - 10.0, top - 14.0, wd + 20.0, 14.0), roof)
+		draw_rect(rect, roof.lightened(0.35))
+		draw_rect(rect, roof.darkened(0.2), false, 4.0)
+		_rr(Rect2(c.x - 22.0, c.y - 40.0, 44.0, 36.0), Color("9ed2f2").lerp(Color("ffd36e"), _dusk), 6)
+		_rr(Rect2(c.x - 40.0 + 20.0 * -side, c.y + 22.0, 30.0, 30.0), Color("b8bdc8"), 4)
 	else:
-		draw_colored_polygon(PackedVector2Array([
-				Vector2(left - 12.0, top), Vector2(0.0, top - 52.0), Vector2(left + wd + 12.0, top)]), roof)
-	var glass := Color("9ed2f2").lerp(Color("ffd36e"), _dusk)
-	draw_rect(Rect2(left + 22.0, top + 26.0, 36.0, 38.0), glass)
-	draw_rect(Rect2(left + wd - 58.0, top + 26.0, 36.0, 38.0), glass)
-	var door := Color("e0533d") if hs.kind == 0 else Color("2f4858")
-	draw_rect(Rect2(-14.0, -56.0, 28.0, 56.0), door)
-	draw_circle(Vector2(8.0, -28.0), 2.5, Color("ffe08a"))
+		draw_rect(Rect2(rect.position.x, rect.position.y, HOUSE_W * 0.5, HOUSE_D), roof.lightened(0.14))
+		draw_rect(Rect2(c.x, rect.position.y, HOUSE_W * 0.5, HOUSE_D), roof.darkened(0.14))
+		var ry := rect.position.y + 14.0
+		while ry < rect.end.y - 6.0:
+			draw_line(Vector2(rect.position.x, ry), Vector2(rect.end.x, ry), Color(0, 0, 0, 0.08), 2.0)
+			ry += 16.0
+		draw_line(Vector2(c.x, rect.position.y), Vector2(c.x, rect.end.y), roof.darkened(0.35), 3.0)
+		draw_rect(Rect2(c.x - side * -34.0 - 10.0, rect.position.y + 18.0, 20.0, 22.0), Color("3b3f4f"))
+	if _dusk > 0.05:
+		_ellipse(c + Vector2(side * 30.0, 30.0), 20.0, 16.0, Color("ffd36e", 0.55 * _dusk))
 	if hs.kind == 2:
-		var fx := left + wd + 14.0
-		draw_line(Vector2(fx, 0), Vector2(fx, -22.0), Color("ff6fa5"), 2.0)
-		draw_circle(Vector2(fx, -28.0), 6.0, Color("ff6fa5"))
-		draw_line(Vector2(fx + 4.0, -30.0), Vector2(fx + 11.0, -28.0), Color("ffb36b"), 2.0)
+		var fp := Vector2(inner_x - side * 52.0, c.y + 62.0)
+		draw_line(fp, fp + Vector2(0, 14), Color("ff6fa5"), 2.0)
+		_ellipse(fp, 7.0, 5.0, Color("ff6fa5"))
+		draw_colored_polygon(PackedVector2Array([fp + Vector2(0, -4), fp + Vector2(-5, -12), fp + Vector2(5, -12)]), Color("ffb36b"))
 
 
-func _draw_pins(w: float) -> void:
-	for i in HOUSE_COUNT:
-		if not _pins.has(i):
-			continue
-		var sx := house_x(i) - _cam
-		if sx < -80.0 or sx > w + 80.0:
-			continue
-		var kind: String = _pins[i]
-		var top := _ground_y - (float(_houses[i].h) + 66.0) * HOUSE_K - 40.0
-		var active := kind != "done"
-		var c := Vector2(sx, top + (sin(_time * 3.0 + i) * 7.0 if active else 0.0))
-		var col := Color("3fae6a") if kind == "lawn" else (Color("e0533d") if kind == "card" else Color("9aa4b2"))
-		if active:
-			draw_circle(c, 44.0 + sin(_time * 4.0) * 5.0, Color(col, 0.25))
-		draw_colored_polygon(PackedVector2Array([c + Vector2(-12, 26), c + Vector2(12, 26), c + Vector2(0, 50)]), col)
-		draw_circle(c, 34.0, col)
-		match kind:
-			"lawn":
-				for k in 3:
-					var bx := c.x - 14.0 + k * 14.0
-					draw_colored_polygon(PackedVector2Array([
-							Vector2(bx - 5.0, c.y + 14.0), Vector2(bx + (k - 1) * 3.0, c.y - 16.0 - (k % 2) * 4.0),
-							Vector2(bx + 5.0, c.y + 14.0)]), Color.WHITE)
-			"card":
-				draw_string(ThemeDB.fallback_font, c + Vector2(-30.0, 16.0), "!",
-						HORIZONTAL_ALIGNMENT_CENTER, 60.0, 46, Color.WHITE)
-			_:
-				draw_polyline(PackedVector2Array([c + Vector2(-14, 2), c + Vector2(-4, 13), c + Vector2(15, -11)]),
-						Color.WHITE, 6.0, true)
+func _draw_highlight(i: int) -> void:
+	if i != _near:
+		return
+	var c := _house_c(i) - Vector2(0, _cam)
+	var pulse := 0.5 + 0.5 * sin(_time * 6.0)
+	var rect := Rect2(c.x - HOUSE_W * 0.5, c.y - HOUSE_D * 0.5, HOUSE_W, HOUSE_D).grow(10.0 + pulse * 4.0)
+	var active: bool = _pins.get(i, "") in ["lawn", "card"]
+	var col := Color("ffd36e") if active else Color(1, 1, 1, 0.8)
+	draw_rect(rect, Color(col, 0.12 + 0.08 * pulse))
+	draw_rect(rect, Color(col, 0.95), false, 5.0)
 
 
-func _draw_car(w: float, h: float) -> void:
-	var lane_y := h - (h - (_ground_y + LAWN_H + WALK_H + 8.0)) * 0.22
-	var x := fposmod(_time * 140.0, w + 500.0) - 250.0
-	var col := Color("e0533d").lerp(Color("7a2a24"), _dusk * 0.5)
-	draw_rect(Rect2(x, lane_y - 44.0, 170.0, 34.0), col)
-	draw_colored_polygon(PackedVector2Array([
-			Vector2(x + 34.0, lane_y - 44.0), Vector2(x + 58.0, lane_y - 74.0),
-			Vector2(x + 120.0, lane_y - 74.0), Vector2(x + 146.0, lane_y - 44.0)]), col.lightened(0.08))
-	draw_rect(Rect2(x + 64.0, lane_y - 68.0, 52.0, 22.0), Color("cfe9ff").lerp(Color("ffd36e"), _dusk * 0.6))
-	for wx in [x + 36.0, x + 134.0]:
-		draw_circle(Vector2(wx, lane_y - 8.0), 16.0, Color("111522"))
-		draw_circle(Vector2(wx, lane_y - 8.0), 7.0, Color("9aa4b2"))
+func _draw_pin(i: int) -> void:
+	if not _pins.has(i):
+		return
+	var kind: String = _pins[i]
+	var active := kind != "done"
+	var c := _house_c(i) - Vector2(0, _cam) + Vector2(0, -18.0 + (sin(_time * 3.0 + i) * 6.0 if active else 0.0))
+	var col := Color("3fae6a") if kind == "lawn" else (Color("e0533d") if kind == "card" else Color("9aa4b2"))
+	if active:
+		_ellipse(c, 44.0 + sin(_time * 4.0) * 5.0, 44.0 + sin(_time * 4.0) * 5.0, Color(col, 0.25))
+	_ellipse(c + Vector2(6, 8), 34.0, 34.0, Color(0, 0, 0, 0.2))
+	_ellipse(c, 34.0, 34.0, col)
+	match kind:
+		"lawn":
+			for k in 3:
+				var bx := c.x - 14.0 + k * 14.0
+				draw_colored_polygon(PackedVector2Array([
+						Vector2(bx - 5.0, c.y + 14.0), Vector2(bx + (k - 1) * 3.0, c.y - 16.0 - (k % 2) * 4.0),
+						Vector2(bx + 5.0, c.y + 14.0)]), Color.WHITE)
+		"card":
+			draw_string(ThemeDB.fallback_font, c + Vector2(-30.0, 16.0), "!",
+					HORIZONTAL_ALIGNMENT_CENTER, 60.0, 46, Color.WHITE)
+		_:
+			draw_polyline(PackedVector2Array([c + Vector2(-14, 2), c + Vector2(-4, 13), c + Vector2(15, -11)]),
+					Color.WHITE, 6.0, true)
 
 
-func _draw_walker() -> void:
-	var foot := Vector2(_player_x - _cam, _ground_y + LAWN_H + WALK_H * 0.5 + 10.0)
-	var swing := sin(_phase) if _walking else 0.0
-	var bob := absf(sin(_phase)) * 4.0 if _walking else 1.0 + sin(_time * 2.0)
-	draw_set_transform(foot, 0.0, Vector2(WALKER_K * _facing, WALKER_K))
-	var hip := Vector2(0, -34.0 - bob)
-	draw_set_transform(foot + Vector2(0, 2.0 * WALKER_K), 0.0, Vector2(WALKER_K * _facing, WALKER_K * 0.25))
-	draw_circle(Vector2.ZERO, 24.0, Color(0, 0, 0, 0.2))
-	draw_set_transform(foot, 0.0, Vector2(WALKER_K * _facing, WALKER_K))
-	draw_line(hip + Vector2(-2, 0), Vector2(-swing * 16.0, -bob * 0.2), Color("151d2e"), 8.0, true)
-	draw_line(hip + Vector2(2, 0), Vector2(swing * 16.0, -bob * 0.2), SUIT, 8.0, true)
-	draw_circle(Vector2(-swing * 16.0 + 3.0, 0), 5.0, Color("0d1220"))
-	draw_circle(Vector2(swing * 16.0 + 3.0, 0), 5.0, Color("0d1220"))
-	var torso_top := hip + Vector2(0, -44.0)
-	draw_line(hip, torso_top, SUIT, 26.0, true)
-	draw_line(hip + Vector2(0, -38.0), hip + Vector2(0, -16.0), Color("e0533d"), 4.0, true)
-	var shoulder := torso_top + Vector2(0, 8.0)
-	draw_line(shoulder, shoulder + Vector2(swing * 14.0, 28.0), SUIT.lightened(0.1), 7.0, true)
-	var hand := shoulder + Vector2(-swing * 12.0, 28.0)
-	draw_line(shoulder, hand, SUIT, 7.0, true)
-	draw_rect(Rect2(hand + Vector2(-9.0, 2.0), Vector2(22.0, 16.0)), Color("8a5a34"))
-	var head := torso_top + Vector2(0, -16.0)
-	draw_circle(head, 15.0, SKIN)
-	draw_arc(head, 15.0, PI * 1.05, PI * 1.95, 14, Color("2b2118"), 8.0, true)
-	draw_circle(head + Vector2(6.0, -1.0), 1.8, Color("2b2118"))
+func _draw_walker(pos: Vector2) -> void:
+	var swing := sin(_phase) if _moving else 0.0
+	var k := WALKER_K * (1.0 + 0.03 * absf(sin(_phase))) if _moving else WALKER_K * (1.0 + 0.012 * sin(_time * 2.0))
+	draw_set_transform(pos + Vector2(8, 10), _angle, Vector2(k * 1.2, k))
+	_ellipse(Vector2.ZERO, 20.0, 15.0, Color(0, 0, 0, 0.25))
+	draw_set_transform(pos, _angle, Vector2(k, k))
+	var suit := Color("23304a")
+	draw_circle(Vector2(-8, swing * 12.0 + 4.0), 6.5, Color("0d1220"))
+	draw_circle(Vector2(8, -swing * 12.0 + 4.0), 6.5, Color("0d1220"))
+	draw_line(Vector2(-16, 0), Vector2(-19, swing * 10.0 + 4.0), suit.lightened(0.1), 6.0, true)
+	var hand := Vector2(19, -swing * 10.0 + 4.0)
+	draw_line(Vector2(16, 0), hand, suit, 6.0, true)
+	draw_rect(Rect2(hand + Vector2(-1, -9), Vector2(12, 24)), Color("8a5a34"))
+	_ellipse(Vector2(0, 0), 18.0, 11.0, suit)
+	draw_line(Vector2(0, -6), Vector2(0, 6), Color("e0533d"), 3.0)
+	draw_circle(Vector2(0, -2), 11.0, Color("f2c29b"))
+	draw_arc(Vector2(0, -2), 11.0, 0.0, PI, 14, Color("2b2118"), 7.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _bubble_t > 0.0:
 		var font := ThemeDB.fallback_font
 		var tsize := font.get_string_size(_bubble, HORIZONTAL_ALIGNMENT_LEFT, -1, 26)
-		var box := Rect2(foot.x - tsize.x * 0.5 - 16.0, foot.y - 290.0, tsize.x + 32.0, 52.0)
+		var box := Rect2(pos.x - tsize.x * 0.5 - 16.0, pos.y - 100.0, tsize.x + 32.0, 52.0)
 		box.position.x = clampf(box.position.x, 8.0, size.x - box.size.x - 8.0)
-		draw_style_box(_bubble_style, box)
+		_rr(box, Color.WHITE, 14)
 		draw_string(font, box.position + Vector2(16.0, 36.0), _bubble, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("1c1b1f"))
+
+
+func _chevron(c: Vector2, up: bool, alpha: float) -> void:
+	var d := -1.0 if up else 1.0
+	draw_polyline(PackedVector2Array([c + Vector2(-16, -7 * d), c + Vector2(0, 7 * d), c + Vector2(16, -7 * d)]),
+			Color(1, 1, 1, alpha), 5.0, true)
+
+
+func _draw_ui(w: float, h: float) -> void:
+	var font := ThemeDB.fallback_font
+	if _dragging:
+		var knob := _anchor + Vector2(0, clampf(_finger.y - _anchor.y, -STICK_RANGE, STICK_RANGE))
+		draw_arc(_anchor, STICK_RANGE * 0.62, 0.0, TAU, 40, Color(1, 1, 1, 0.28), 4.0, true)
+		_chevron(_anchor + Vector2(0, -STICK_RANGE * 0.62 - 22.0), true, 0.5)
+		_chevron(_anchor + Vector2(0, STICK_RANGE * 0.62 + 22.0), false, 0.5)
+		_ellipse(knob, 30.0, 30.0, Color(1, 1, 1, 0.6))
+	elif not _used:
+		var hc := Vector2(w - 90.0, h - 150.0)
+		var bob := sin(_time * 3.0) * 8.0
+		_chevron(hc + Vector2(0, -40.0 - bob), true, 0.8)
+		_chevron(hc + Vector2(0, 40.0 + bob), false, 0.8)
+		draw_string(font, hc + Vector2(-60.0, 8.0), "DRAG", HORIZONTAL_ALIGNMENT_CENTER, 120.0, 26, Color(1, 1, 1, 0.9))
+	var prompt := ""
+	if _near >= 0:
+		var kind: String = _pins.get(_near, "")
+		prompt = "RELEASE TO INSPECT" if kind == "lawn" or kind == "card" else "NOTHING TO INSPECT"
+	if prompt != "":
+		var ts := font.get_string_size(prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, 26)
+		var box := Rect2(20.0, h - 72.0, ts.x + 32.0, 52.0)
+		_rr(box, Color(0, 0, 0, 0.55), 14)
+		draw_string(font, box.position + Vector2(16.0, 36.0), prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("ffd36e"))

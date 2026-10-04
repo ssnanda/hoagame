@@ -14,6 +14,7 @@ var _score_label: Label
 var _best_label: Label
 var _task_label: Label
 var _street: Control
+var _margin: MarginContainer
 var _overlay: ColorRect
 var _card: Panel
 var _over_panel: Control
@@ -75,7 +76,7 @@ func _new_day() -> void:
 
 func _update_task() -> void:
 	var left := _complaints.size() - _done
-	_task_label.text = "Tap a house with a pin  ·  %d complaint%s left" % [left, "" if left == 1 else "s"]
+	_task_label.text = "Drag up/down to walk  ·  %d complaint%s left" % [left, "" if left == 1 else "s"]
 
 
 func _on_visit(house: int) -> void:
@@ -206,10 +207,13 @@ func _build_ui() -> void:
 	add_child(bg)
 
 	var margin := MarginContainer.new()
+	_margin = margin
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 24)
 	add_child(margin)
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
@@ -285,6 +289,23 @@ func _build_game_over() -> void:
 	button.add_theme_font_size_override("font_size", 36)
 	button.pressed.connect(_start)
 	box.add_child(button)
+
+
+## Push the HUD clear of the notch / Dynamic Island and the home indicator.
+func _apply_safe_area() -> void:
+	var win := Vector2(DisplayServer.window_get_size())
+	var safe := DisplayServer.get_display_safe_area()
+	var top := 0.0
+	var bottom := 0.0
+	if win.x > 0.0 and safe.size != Vector2i.ZERO:
+		var k := get_viewport_rect().size.x / win.x
+		top = maxf(float(safe.position.y) * k, 0.0)
+		bottom = maxf((win.y - float(safe.end.y)) * k, 0.0)
+	if OS.get_name() == "iOS":
+		top = maxf(top, 100.0)
+		bottom = maxf(bottom, 30.0)
+	_margin.add_theme_constant_override("margin_top", 24 + int(top))
+	_margin.add_theme_constant_override("margin_bottom", 24 + int(bottom))
 
 
 func _card_style() -> StyleBoxFlat:
