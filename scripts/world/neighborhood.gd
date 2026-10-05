@@ -520,3 +520,46 @@ func unreachable_lots(start: Vector2, step := 14.0) -> Array:
 		if not near_reached:
 			missing.append(lot.id)
 	return missing
+
+
+# ---------------------------------------------------------------- navigation
+
+var _nav: AStarGrid2D
+var _nav_step := 14.0
+
+
+## Grid path-finding over the same walkable surface the player uses. Used by the
+## training-video director and available for in-game route hints.
+func build_nav(step := 14.0) -> void:
+	_nav_step = step
+	_nav = AStarGrid2D.new()
+	_nav.region = Rect2i(0, 0, int(WORLD_W / step) + 1, int(WORLD_H / step) + 1)
+	_nav.cell_size = Vector2(step, step)
+	_nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	_nav.update()
+	for x in _nav.region.size.x:
+		for y in _nav.region.size.y:
+			if not is_walkable(Vector2(x, y) * step):
+				_nav.set_point_solid(Vector2i(x, y), true)
+
+
+## Waypoints from `from` to `to`, or an empty array when unreachable.
+func find_path(from: Vector2, to: Vector2) -> PackedVector2Array:
+	if _nav == null:
+		build_nav()
+	var a := Vector2i((from / _nav_step).round())
+	var b := Vector2i((to / _nav_step).round())
+	for cell in [a, b]:
+		if _nav.is_in_boundsv(cell) and _nav.is_point_solid(cell):
+			var found := false
+			for dx in range(-2, 3):
+				for dy in range(-2, 3):
+					var c: Vector2i = cell + Vector2i(dx, dy)
+					if not found and _nav.is_in_boundsv(c) and not _nav.is_point_solid(c):
+						_nav.set_point_solid(cell, false)
+						found = true
+	var cells := _nav.get_id_path(a, b)
+	var result := PackedVector2Array()
+	for cell in cells:
+		result.append(Vector2(cell) * _nav_step)
+	return result

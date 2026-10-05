@@ -34,6 +34,14 @@ const QUIPS := [
 	"A sprinkler has excellent timing.",
 	"The curtains moved. Neighborhood watch works.",
 	"A dog objects to this inspection.",
+	"Nothing to report. A rare and unsettling feeling.",
+	"The hedge is within code. The hedge knows.",
+	"A flag, a wreath, and a lot of confidence.",
+	"No violations. The neighbors are disappointed.",
+	"Compliant. Smug, but compliant.",
+	"A garden gnome files a silent complaint.",
+	"Perfectly legal. Mildly upsetting.",
+	"Mulch recently applied. Mood: unavoidable.",
 ]
 
 var hood: Neighborhood

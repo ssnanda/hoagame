@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/training_videos.gd" id="1"]
+
+[node name="TrainingVideos" type="Node"]
+script = ExtResource("1")
