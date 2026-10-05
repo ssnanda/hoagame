@@ -16,6 +16,7 @@ const SHOWCASE_ID := "showcase_first"   ## the scripted first encounter every ne
 
 var catalog: Array = []
 var last_seen: Dictionary = {}  ## id -> day it last played (persisted by the sim)
+var force_next := ""            ## QA / video-capture hook: play this encounter id next (ignored in normal play)
 var _seed_rng: RandomNumberGenerator
 
 
@@ -33,6 +34,12 @@ func load_data() -> void:
 func pick(ctx: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	if catalog.is_empty():
 		return {}
+	if force_next != "":
+		for entry: Dictionary in catalog:
+			if str(entry.get("id", "")) == force_next:
+				force_next = ""
+				return entry.duplicate(true)
+		force_next = ""
 	# The first real ruling always plays the polished showcase; random scenes wait until it has.
 	if not last_seen.has(SHOWCASE_ID):
 		for entry: Dictionary in catalog:

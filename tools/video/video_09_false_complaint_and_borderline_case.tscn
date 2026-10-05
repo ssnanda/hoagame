@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/video/video_09_false_complaint_and_borderline_case.gd" id="1"]
+
+[node name="Video" type="Node"]
+script = ExtResource("1")

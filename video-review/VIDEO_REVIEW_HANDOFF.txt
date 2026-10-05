@@ -1,0 +1,68 @@
+HOA PRESIDENT - VIDEO REVIEW HANDOFF
+Date: 2026-10-05
+Videos: video-review/final/   Index with timestamps: video-review/VIDEO_INDEX.txt
+
+A. GIT STATE
+ Branch main, HEAD abd617f (AltStore manifest 0.1.34+35). Working tree uncommitted:
+ modified scripts/main.gd, scripts/settings.gd, scripts/sim/encounters.gd, scripts/ui/menu_panels.gd;
+ CHAT_HANDOFF_SUMMARY.txt deleted (renamed CHAT_HANDOFF-v2.txt, untracked); new untracked: bin/capture-review-videos.sh,
+ tools/video/, video-review/, several .uid files. Nothing committed, pushed, versioned or released by the agent.
+ Only production-code change for this pass: Encounters.force_next (scripts/sim/encounters.gd), inert unless set.
+
+B. CAPTURE METHOD
+ Godot Movie Maker (--write-movie, --fixed-fps 30, --disable-vsync, --resolution 720x1280, --position 40,0, --always-on-top)
+ against a capture project (video-review/tmp/capture_project) that symlinks the real project but drops the window-size
+ overrides. AVI (MJPEG+PCM) converted with ffmpeg to H.264 yuv420p CRF 27 + AAC 96k, 30 fps, faststart.
+ Clean game viewport only; 1.4 s title card; white dot shows the automated touch. Audio IS captured.
+ Each run uses a throwaway HOME so the owner's saves are untouched.
+
+C. VIDEO LIST (final/)
+ 01_new_game_full_core_loop 133 s | 02_find_the_complaint_navigation 101 s | 03_sidewalk_walkability_and_property_access 71 s
+ 04_camera_and_ui_escape_stress_test 75 s | 05_reinspection_full_flow 78 s | 06_sidewalk_obstruction_case 81 s
+ 07_cinematic_comedy_showcase 210 s | 08_alive_neighborhood_and_weather 84 s | 09_false_complaint_and_borderline_case 86 s
+ All 720x1280, 30 fps, validated (validate_videos.py: ALL OK; start/mid/end frames in tmp/spot/).
+ Durations are shorter than the 3-6 / 2-4 min targets: the neighborhood is compact and the driver does not pad.
+
+D. PURPOSES
+ 01 first-session loop; 02 finding a far complaint (marker, edge arrow, Next chip); 03 sidewalk/cul-de-sac/lawn access;
+ 04 camera/UI escape stress; 05 warning -> reinspection; 06 hedge sidewalk obstruction; 07 eight cinematic scenes;
+ 08 ambient life, golf cart, weather; 09 false complaint and borderline measurement.
+
+E. AUTOMATION METHOD
+ tools/video/video_lib.gd driver: real mouse/touch events via Input.parse_input_event, buttons found by label and tapped at
+ their centers, HUD controls tapped by rect, walking via a virtual thumb, A* sidewalk-preferring planner with stuck detection,
+ pinch gestures. Fixed seeds per video (in VIDEO_INDEX.txt). Run: ./bin/capture-review-videos.sh NN.
+
+F. TELEPORT / SETUP DISCLOSURE
+ 01 none, no setup. 02, 03 setup before recording (selecting complaint, nav rebuild); no teleport while visible.
+ 04 player placed at the property during the title card. 05, 06, 09 hidden setup (warning/cure, rule_case, scripted complaints)
+ behind the title card; force_next in 06. 07 TELEPORTS between scenes (fade to black, place_player) and triggers scenes via
+ main._play_encounter. 08 setup hidden; actors chased by real walking. Walking is always real input.
+
+G. BUGS FOUND
+ No new production gameplay bugs found by the recordings. Driver/tooling issues only (all fixed): wrong movie size, dropped
+ frames when window occluded, parse errors producing runaway AVIs, autopilot stuck on parked cars, planner with no path at spawn,
+ force_next consumed early (06), modal stalls (08/09).
+
+H. BUGS FIXED
+ Tooling only (video_lib.gd / capture script): capture project without window overrides; drawn-frame waits and visible window;
+ watchdog + parse check; progress-based stuck detection, sidestep, obstacle-aware A*; straight-line fallback; dismiss_modals().
+ Earlier in the session: reinspection-tap bug (fixed before this pass).
+
+I. BUGS NOT FIXED
+ Lawn routes can be blocked by driveway cars; hedge detour tight (autopilot snagged 3x in 06); camera shows "DUPLICATE · MOVE OR ZOOM"
+ when retaking at the same spot; first case only ~175 px from spawn; some actor chases in 08 time out depending on seed.
+
+J. VISUAL ISSUES NOTICED
+ Tutorial hint pills overlap the world; "INSPECTION COMPLETE" bubble over the street; discoverable-property prompts appear while
+ passing houses; borderline note reads like a verdict; character poses simple; bottom third of the close-up dark; the game
+ window is visible on screen during capture (needed so frames render).
+
+K. TESTS RERUN AFTER FIXES
+ Headless parse check of every tools/video script; ffprobe/validation of all MP4s. The QA suites (validate_world, qa_flow, qa_cinematic,
+ qa_walk, qa_touch, qa_interrupt) ran earlier this session; the force_next hook is inert by default. Full suite re-run not repeated here.
+
+L. WHAT THE EXTERNAL REVIEWER SHOULD LOOK AT
+ 01: clarity of the first 2 minutes, button discoverability, showcase scene pacing. 02/03: is navigation guidance enough, do sidewalks feel
+ walkable. 04: UI recovers from rapid taps. 05/06/09: case-sheet clarity and rules fairness. 07: comedy timing and readability.
+ 08: does the neighborhood feel alive; weather legibility. Note the compact map and short first walk.

@@ -39,6 +39,7 @@ var _best_label: Label
 var _task_label: Label
 var _politics_label: Label
 var _version_label: Label
+var _version_chip: Label            ## always-visible version at the bottom of the screen
 var _street: Control
 var _margin: MarginContainer
 var _overlay: ColorRect
@@ -74,6 +75,7 @@ var _morning_queue: Array = []
 var _update_request: HTTPRequest
 var _update_prompt: Control
 var _available_version := ""
+var update_status := "Checking for updates..."   ## shown next to the version so you can tell if you are current
 var _altstore_launch_pending := false
 
 
@@ -111,7 +113,7 @@ func _show_title() -> void:
 		"communities": func(): _open_communities(),
 			"howto": func(): _show_modal(MenuPanels.how_to_play(size, _close_modal)),
 		"settings": func(): _show_modal(MenuPanels.settings(size, _close_modal, _reset_game)),
-		"about": func(): _show_modal(MenuPanels.about(size, _close_modal)),
+		"about": func(): _show_modal(MenuPanels.about(size, _close_modal, update_status)),
 	})
 	_title.z_index = 40
 	add_child(_title)
@@ -184,6 +186,7 @@ func _open_menu() -> void:
 			_street.debug_view = not _street.debug_view
 			_close_modal())
 		modal.body.add_child(debug_button)
+	modal.footer.add_child(UiKit.label("%s\n%s" % [Settings.version_text(), update_status], 16, UiKit.MUTED, true))
 	_show_modal(modal.root)
 
 
@@ -255,17 +258,43 @@ func _on_update_check_completed(result: int, response_code: int, _headers: Packe
 	if is_instance_valid(_update_request):
 		_update_request.queue_free()
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		update_status = "Couldn't check for updates (offline?)"
+		_refresh_version_chip()
 		return
 	var source = JSON.parse_string(body.get_string_from_utf8())
 	if not source is Dictionary:
+		update_status = "Couldn't read the update list"
+		_refresh_version_chip()
 		return
 	for app in source.get("apps", []):
 		if app is Dictionary and str(app.get("bundleIdentifier", "")) == ALTSTORE_BUNDLE_ID:
 			var remote_version := str(app.get("version", ""))
-			if _is_newer_version(remote_version, str(ProjectSettings.get_setting("application/config/version", "0.0.0"))):
+			var remote_build := int(str(app.get("buildVersion", "0")))
+			var remote_label := "%s (build %d)" % [remote_version, remote_build]
+			if _is_newer_build(remote_version, remote_build, Settings.version_name(), Settings.build_number()):
 				_available_version = remote_version
+				update_status = "Update available: %s" % remote_label
 				_show_update_prompt(str(app.get("versionDescription", "")))
+			else:
+				update_status = "Up to date (latest is %s)" % remote_label
+			_refresh_version_chip()
 			return
+	update_status = "App not found in the update list"
+	_refresh_version_chip()
+
+
+## Newer by version number, or the same version with a higher build number.
+func _is_newer_build(remote: String, remote_build: int, local: String, local_build: int) -> bool:
+	if _is_newer_version(remote, local):
+		return true
+	return not _is_newer_version(local, remote) and remote_build > local_build
+
+
+func _refresh_version_chip() -> void:
+	if is_instance_valid(_version_chip):
+		_version_chip.text = "%s" % Settings.version_text()
+	if is_instance_valid(_version_label):
+		_version_label.text = "%s · %s" % [sim.community_name, Settings.version_text()]
 
 
 func _is_newer_version(remote: String, local: String) -> bool:
@@ -1278,7 +1307,7 @@ func _refresh() -> void:
 	_stats_button.text = "STATS !" if alarm else "STATS"
 	if int(GameState.stats.get("happiness", 50)) <= 10:
 		_award("everyone_hates_me")
-	_version_label.text = "%s · v%s" % [sim.community_name, str(ProjectSettings.get_setting("application/config/version", "dev"))]
+	_refresh_version_chip()
 	_stats_button.add_theme_color_override("font_color", Color("ff8a7a") if alarm else Color.WHITE)
 	for key in _bars:
 		var bar: ProgressBar = _bars[key]
@@ -1501,7 +1530,7 @@ func _build_ui() -> void:
 	_best_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	meta.add_child(_best_label)
 	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
-	_version_label = _make_label("v%s" % version, 16, Color("b9d8e8"), false)
+	_version_label = _make_label(Settings.version_text(), 16, Color("b9d8e8"), false)
 	_version_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	meta.add_child(_version_label)
 	_street = Control.new()
@@ -1518,7 +1547,15 @@ func _build_ui() -> void:
 	_street.evidence_changed.connect(func(): _save_progress())
 	vbox.add_child(_street)
 	_task_label = _make_label("", 22, Color.WHITE, true)
-	vbox.add_child(_task_label)
+	_task_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var bottom := HBoxContainer.new()
+	vbox.add_child(bottom)
+	bottom.add_child(_task_label)
+	_version_chip = _make_label(Settings.version_text(), 16, Color(1, 1, 1, 0.75))
+	_version_chip.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_version_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_version_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bottom.add_child(_version_chip)
 	_overlay = ColorRect.new()
 	_overlay.color = Color(0, 0, 0, 0.65)
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)

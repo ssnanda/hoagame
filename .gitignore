@@ -4,3 +4,7 @@ export/
 build/
 .DS_Store
 releases/
+
+# video capture scratch (raw AVIs, logs, sandboxes)
+video-review/tmp/
+video-review/final/

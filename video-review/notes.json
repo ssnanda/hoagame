@@ -1,0 +1,74 @@
+{
+ "01_new_game_full_core_loop": {
+  "id": "01", "seed": "7771 (neighborhood 7771; Godot/sim RNG seeded 7771)",
+  "setup": "Fresh profile (throwaway HOME), tutorial NOT done, so the real title, intro, daily brief and the scripted first case appear. Nothing is staged; the recording starts at the title card.",
+  "proves": "The whole new-player loop: title -> New Term -> intro -> brief -> Next chip/marker/minimap -> pinch zoom + RESET ZOOM -> full map -> walk to the first complaint -> arrival cue -> INSPECT -> property card -> complaint details -> TAKE PHOTO -> camera -> PhotoPreview -> USE PHOTO -> Evidence attached -> REVIEW & DECIDE -> case sheet -> WARNING -> guaranteed showcase cinematic (camera push, HUD fade, door, resident, argument, sprinklers, choices, outcome) -> smooth return -> control restored -> STATS and CASE BOARD.",
+  "movement": "REAL. No teleport at any time while recording (the player walks with a virtual thumb).",
+  "input": "REAL taps on the real buttons and HUD rectangles (mouse events pushed through the viewport), real thumb drag for walking, real two-finger pinch events. Only Godot-internal calls: none during the visible recording.",
+  "issues": "The scripted first case is deliberately very close to the start (about 175 px), so the walk to it is only about 1 s; longer walking is shown in videos 02 and 03. The edge arrow does not appear in this clip because the target is on screen from the start (see video 02). Tutorial hint pills overlap the world; 'INSPECTION COMPLETE' bubble sits over the street briefly after the scene."
+ },
+ "02_find_the_complaint_navigation": {
+  "id": "02", "seed": "2024",
+  "setup": "Hidden behind the title card: new game (tutorial skipped), the nearest complaint that starts off screen (about 4600 px away) is selected as the objective. Player stands at the normal start. No teleport once recording starts.",
+  "proves": "Finding a complaint is easy: Next chip (address, COMPLAINT, distance), edge arrow with address/distance, minimap and full-map marker, walking toward it with the arrow/distance updating, world marker when near, arrival cue, neutral COMPLAINT wording; then the Next chip is tapped to select other assignments and chip/minimap/arrow/marker change together.",
+  "movement": "REAL. No teleport while recording.",
+  "input": "REAL: taps on the minimap, map CLOSE and Next chip; walking by thumb drag.",
+  "issues": "The autopilot got snagged on parked cars/lawns and had to step around them 4 times on the long first walk (this is the harness, but it also shows lawn routes can be blocked by driveway cars). The second walk is cut off on purpose after about 25 s."
+ },
+ "03_sidewalk_walkability_and_property_access": {
+  "id": "03", "seed": "3033",
+  "setup": "Hidden: new game (tutorial skipped). No teleport while recording.",
+  "proves": "Continuous walking on the widened sidewalk (avenue, side street, corner lot, around a cul-de-sac ring), an inspection anchor reached at a house with a driveway car, a street tree and a mailbox, closer-look pinch zoom, cutting across the front lawn, the house and the side yard stopping the player, and a deliberate drift onto the verge.",
+  "movement": "REAL. No teleport while recording.",
+  "input": "REAL thumb drag and pinch events; RESET ZOOM tapped on the HUD.",
+  "issues": "Shorter than the 2-4 minute target (about 70 s): the neighborhood is compact and the player is fast. Steering assist on/off was NOT demonstrated (it would need an on-screen label). Tutorial-style 'OPEN CASE - SOMETHING CATCHES YOUR EYE' prompts appear while passing houses."
+ },
+ "04_camera_and_ui_escape_stress_test": {
+  "id": "04", "seed": "4044",
+  "setup": "Hidden: new game (tutorial skipped); the player is placed at the complaint property's inspection anchor and the random encounter catalog is emptied so only the UI flow is tested. The only setup teleport happens behind the title card.",
+  "proves": "The full camera/UI stress sequence from the brief: INSPECT, card, camera, CANCEL, camera, shutter, preview, RETAKE, camera, shutter, TAKE ANOTHER, camera, shutter, preview CANCEL, USE PHOTO, REVIEW & DECIDE, case sheet, BACK, BACK, world; then reopen, VIEW COMPLAINT / HIDE DETAILS, OPEN CASE, BACK, BACK, world, then movement works.",
+  "movement": "Setup placement only (hidden). After the UI test the player walks away by thumb drag to prove movement is restored.",
+  "input": "REAL taps on every button and on the HUD-drawn camera Cancel/shutter/zoom controls.",
+  "issues": "Taking another photo from the same spot shows 'DUPLICATE - MOVE OR ZOOM' (the camera refuses identical framing); the player has to nudge the zoom. The ALBUM button was not opened in this clip."
+ },
+ "05_reinspection_full_flow": {
+  "id": "05", "seed": "5055",
+  "setup": "Hidden: a warning was issued on a house about 900-1700 px away, its cure period ends, the next morning's sweep creates a REINSPECTION assignment (internal calls: rule_case, next_day, _new_day), and it is selected. Recording starts before the walk. Random encounters disabled.",
+  "proves": "The previously broken reinspection interaction works through the UI: blue circular-arrow marker, REINSPECTION on the Next chip, walk, arrival, REINSPECT/INSPECT, the card, the reinspection panel, Back, reopen, photo, a real decision (CLOSE CASE), return to the world.",
+  "movement": "REAL. No teleport while recording.",
+  "input": "REAL taps/drag.",
+  "issues": "The reinspection result in this run was PARTLY FIXED (random by seed). A discoverable-property prompt appears on the way."
+ },
+ "06_sidewalk_obstruction_case": {
+  "id": "06", "seed": "6066",
+  "setup": "Hidden: a hedge obstruction on the public sidewalk of a nearby house is the complaint (staged by writing the assignment and refreshing the street); the showcase is marked seen; the homeowner scene 'I trimmed that hedge last month!' is queued with the QA hook so it plays after the warning.",
+  "proves": "The intentional sidewalk obstruction: marker, walk, the hedge across the walk, a detour over the verge, INSPECT, camera framed on the obstruction (house not centred), preview naming 'Recorded: Sidewalk obstruction', ruling, related homeowner scene, return.",
+  "movement": "REAL. No teleport while recording.",
+  "input": "REAL taps/drag/pinch.",
+  "issues": "The detour around the hedge is tight: the autopilot was snagged three times (about 10 s) between the hedge, the verge and a neighbor's parked car before getting past. Reviewers should judge whether the obstruction leaves a comfortable route. A first take played the homeowner scene before the card (QA hook consumed too early) and was re-recorded."
+ },
+ "07_cinematic_comedy_showcase": {
+  "id": "07", "seed": "7077",
+  "setup": "Hidden: fresh game. Scene 1 is the real guaranteed first encounter. Scenes 2-8 are queued with the QA hook Encounters.force_next and played through the real _play_encounter path (camera push, HUD fade, panel, outcome, return).",
+  "proves": "Current encounter art and pacing: showcase (door, argument, sprinklers), filming (side entrance, phone), dog + garage, gnome wizard (side entrance), rare mud/dog chase, police, very rare ambulance + blanket, very rare car bump + blanket.",
+  "movement": "TELEPORT BETWEEN SCENES (disclosed): the screen dips to black while the player is placed at another house. This clip is a visual showcase, not a navigation test.",
+  "input": "REAL taps to advance every line and to choose every reply. The scenes themselves are started by an internal call (main._play_encounter), not by a ruling button.",
+  "issues": "Characters are simple code-drawn figures; poses are limited and faces minimal. The bottom third of the close-up is dark when no choices are shown. Rare scenes are shown back to back here; in play they are rare."
+ },
+ "08_alive_neighborhood_and_weather": {
+  "id": "08", "seed": "8088",
+  "setup": "Hidden: new game, then the day is set to a weekday with Sunny weather (Weather.for_day); the stormy segment uses a later day whose real forecast is thunderstorms.",
+  "proves": "Ambient life (walkers, jogger, dog walker, mail carrier, gardeners, crew, neighbors chatting, visitor cars, parked cars, a porch resident) and the real weather system: a sunny weekday morning and then a thunderstorm day with its own morning brief, rain, gloom and lightning.",
+  "movement": "REAL in both segments. The day change between segments is done by an internal call hidden by a fade to black (the viewer sees the new day's real brief).",
+  "input": "REAL taps/drag; the CART button is used; the director's call on the storm morning is answered with a real tap.",
+  "issues": "Which actors are close enough to see depends on the seed; some chases time out (see the log). The ambient crowd is small at this zoom. Rain/lightning contrast is moderate on a phone screen."
+ },
+ "09_false_complaint_and_borderline_case": {
+  "id": "09", "seed": "9099",
+  "setup": "Hidden: fresh game started on day one (scripted first case and scripted FALSE complaint exist). Between cases the rest of day one is marked done and day two begins (internal calls hidden by a fade) so the scripted BORDERLINE grass report appears.",
+  "proves": "Complaint truth is not revealed early: the false 'bins at the curb' complaint looks identical to any other until investigated; the photo shows nothing; the case sheet says nothing seen; DISMISS. Then a borderline grass report: ambiguous, measuring tool, photo, case sheet.",
+  "movement": "REAL. No teleport while recording.",
+  "input": "REAL taps/drag (including MEASURE LAWN and the DISMISS button).",
+  "issues": "After a photo of the borderline lawn the case sheet shows 'Measured 6.1 inches against a 6.0 inch limit' (the stored borderline note), which reads as a precise verdict. The lawn measuring tool itself is only opened and backed out of, not operated."
+ }
+}

@@ -32,6 +32,11 @@ below were updated accordingly. Additions in this round:
   that capture, so it was judged from the luminance numbers and its different shape).
 - Sound: "good" on USE PHOTO. Test-harness fixes: qa_interrupt/qa_cinematic no longer advance a freed panel; qa tools run with --disable-vsync to avoid
   macOS off-screen throttling stalls.
+- VERSION VISIBILITY FIX (reported by the owner after testing): the version label had been moved into the collapsed STATS panel during the HUD cleanup, so it
+  was never visible. Now shown always: HUD bottom-right chip ("v0.1.34 - build 35"), title footer, menu footer (with update status), About. Build number comes
+  from res://VERSION (written by bin/1-bump-version.sh; falls back to project setting). Settings.full_version/version_name/build_number/version_text.
+  Update check now compares version AND build number and records main.update_status ("Up to date (latest is ...)", "Update available: ...", or "Couldn't
+  check ..."), shown in the menu footer and About. Verified by off-screen screenshots; the update-check network call worked in the sandbox.
 FINAL TEST RESULTS AFTER THE FINISHING ROUND (all on the final tree):
   validate_world: 0 warnings, self-test catches a tree on an anchor, 0 unreachable, 0 slot issues, 0 vehicle access conflicts over 28 days, 40-seed sweep 0.
   qa_encounters 37 scenes 0 problems; qa_walk 0 problems (assist 19.2 vs 25.7 px, 0 stuck); qa_input 0; qa_flow 0; qa_touch 0 small of 47;
@@ -546,3 +551,12 @@ Godot at /Applications/Godot.app/Contents/MacOS/Godot (referred to as godot belo
 - Seeds: Neighborhood.build(seed) and sim `-- seed=N` for reproducibility.
 - Keep saves backward compatible (new fields optional; WORLD_VERSION constant in main.gd).
 - Do not change bundle IDs/signing; customer-facing branding is ITSpector LLC (NC, USA) and Wozig.
+
+
+=== AUTOMATED VIDEO REVIEW PASS (2026-10-05) ===
+- Created tools/video/ (video_lib.gd driver + video_00..09 scenes) and bin/capture-review-videos.sh.
+- Produced 9 MP4s (720x1280, 30 fps, H.264 + AAC audio) in video-review/final/; all validated.
+- Index: video-review/VIDEO_INDEX.txt. Full handoff: video-review/VIDEO_REVIEW_HANDOFF.txt (sections A-L).
+- Production change: Encounters.force_next hook (scripts/sim/encounters.gd), inert unless set.
+- No new P0 gameplay bugs found; tooling bugs fixed. Remaining issues listed in handoff section I/J.
+- Video 07 teleports between scenes (disclosed). Nothing committed, pushed, versioned or released.

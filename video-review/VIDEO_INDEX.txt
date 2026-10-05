@@ -1,0 +1,347 @@
+HOA GAME - REVIEW VIDEO INDEX
+==============================
+
+All clips: 720x1280 portrait, 30 fps, H.264 (yuv420p) + AAC audio, recorded with Godot Movie Maker from the real game.
+A small white dot/ring shows where the automated 'finger' touches. Titles at the start are 1.4 s cards.
+Regenerate any clip:  ./bin/capture-review-videos.sh NN   (then: python3 video-review/make_index.py)
+
+------------------------------------------------------------------------------
+01_new_game_full_core_loop.mp4
+------------------------------------------------------------------------------
+duration: 02:13 (133.1 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 9.1 MB
+seed: 7771 (neighborhood 7771; Godot/sim RNG seeded 7771)
+command: ./bin/capture-review-videos.sh 01
+setup: Fresh profile (throwaway HOME), tutorial NOT done, so the real title, intro, daily brief and the scripted first case appear. Nothing is staged; the recording starts at the title card.
+proves: The whole new-player loop: title -> New Term -> intro -> brief -> Next chip/marker/minimap -> pinch zoom + RESET ZOOM -> full map -> walk to the first complaint -> arrival cue -> INSPECT -> property card -> complaint details -> TAKE PHOTO -> camera -> PhotoPreview -> USE PHOTO -> Evidence attached -> REVIEW & DECIDE -> case sheet -> WARNING -> guaranteed showcase cinematic (camera push, HUD fade, door, resident, argument, sprinklers, choices, outcome) -> smooth return -> control restored -> STATS and CASE BOARD.
+movement: REAL. No teleport at any time while recording (the player walks with a virtual thumb).
+input: REAL taps on the real buttons and HUD rectangles (mouse events pushed through the viewport), real thumb drag for walking, real two-finger pinch events. Only Godot-internal calls: none during the visible recording.
+known issues visible in the clip: The scripted first case is deliberately very close to the start (about 175 px), so the walk to it is only about 1 s; longer walking is shown in videos 02 and 03. The edge arrow does not appear in this clip because the target is on screen from the start (see video 02). Tutorial hint pills overlap the world; 'INSPECTION COMPLETE' bubble sits over the street briefly after the scene.
+
+timestamps (auto-logged by the driver; movie time):
+  00:01  state MODAL
+  00:02  objective -> none
+  00:06  press NEW TERM
+  00:06  state CASE_DECISION
+  00:11  press TAKE THE GAVEL
+  00:11  objective -> 143 Maple Grove Lane
+  00:16  press START THE DAY
+  00:17  state WORLD
+  00:37  walk start (175 px to go)
+  00:38  walk end (10 px from target)
+  00:41  state PROPERTY_CONTEXT
+  00:44  press VIEW COMPLAINT
+  00:45  state COMPLAINT_VIEW
+  00:49  press HIDE DETAILS
+  00:49  state PROPERTY_CONTEXT
+  00:51  press TAKE PHOTO
+  00:51  state CAMERA
+  00:56  state PHOTO_PREVIEW
+  01:01  press USE PHOTO
+  01:02  state PROPERTY_CONTEXT
+  01:05  press REVIEW & DECIDE
+  01:05  state CASE_DECISION
+  01:11  press WARNING
+  01:11  state CINEMATIC
+  01:34  press Give them a few days
+  01:42  objective -> 145 Maple Grove Lane
+  01:42  state WORLD
+  01:55  press STATS
+  02:01  press MENU
+  02:01  state MODAL
+  02:04  press CASE BOARD
+  02:09  press CLOSE
+  02:09  state WORLD
+
+------------------------------------------------------------------------------
+02_find_the_complaint_navigation.mp4
+------------------------------------------------------------------------------
+duration: 01:40 (100.8 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 19.7 MB
+seed: 2024
+command: ./bin/capture-review-videos.sh 02
+setup: Hidden behind the title card: new game (tutorial skipped), the nearest complaint that starts off screen (about 4600 px away) is selected as the objective. Player stands at the normal start. No teleport once recording starts.
+proves: Finding a complaint is easy: Next chip (address, COMPLAINT, distance), edge arrow with address/distance, minimap and full-map marker, walking toward it with the arrow/distance updating, world marker when near, arrival cue, neutral COMPLAINT wording; then the Next chip is tapped to select other assignments and chip/minimap/arrow/marker change together.
+movement: REAL. No teleport while recording.
+input: REAL: taps on the minimap, map CLOSE and Next chip; walking by thumb drag.
+known issues visible in the clip: The autopilot got snagged on parked cars/lawns and had to step around them 4 times on the long first walk (this is the harness, but it also shows lawn routes can be blocked by driveway cars). The second walk is cut off on purpose after about 25 s.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 1214 Dogwood Lane
+  00:01  objective -> 416 Cedar Ridge Way
+  00:12  walk start (4601 px to go)
+  00:17  unstick: stepping around an obstacle
+  00:54  walk end (30 px from target)
+  00:57  objective -> 101 Maple Grove Lane
+  01:01  objective -> 312 Hawthorne Drive
+  01:04  objective -> 1214 Dogwood Lane
+  01:08  walk start (4563 px to go)
+  01:17  unstick: stepping around an obstacle
+  01:37  walk end (575 px from target)
+
+------------------------------------------------------------------------------
+03_sidewalk_walkability_and_property_access.mp4
+------------------------------------------------------------------------------
+duration: 01:10 (70.7 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 10.3 MB
+seed: 3033
+command: ./bin/capture-review-videos.sh 03
+setup: Hidden: new game (tutorial skipped). No teleport while recording.
+proves: Continuous walking on the widened sidewalk (avenue, side street, corner lot, around a cul-de-sac ring), an inspection anchor reached at a house with a driveway car, a street tree and a mailbox, closer-look pinch zoom, cutting across the front lawn, the house and the side yard stopping the player, and a deliberate drift onto the verge.
+movement: REAL. No teleport while recording.
+input: REAL thumb drag and pinch events; RESET ZOOM tapped on the HUD.
+known issues visible in the clip: Shorter than the 2-4 minute target (about 70 s): the neighborhood is compact and the player is fast. Steering assist on/off was NOT demonstrated (it would need an on-screen label). Tutorial-style 'OPEN CASE - SOMETHING CATCHES YOUR EYE' prompts appear while passing houses.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 140 Maple Grove Lane
+  00:12  walk start (994 px to go)
+  00:18  walk end (21 px from target)
+  00:33  walk start (195 px to go)
+  00:37  unstick: stepping around an obstacle
+  00:40  walk end (12 px from target)
+  00:48  walk start (47 px to go)
+  00:58  walk start (20 px to go)
+  00:58  walk end (20 px from target)
+  01:04  walk start (239 px to go)
+  01:06  walk end (18 px from target)
+
+------------------------------------------------------------------------------
+04_camera_and_ui_escape_stress_test.mp4
+------------------------------------------------------------------------------
+duration: 01:15 (75.1 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 6.2 MB
+seed: 4044
+command: ./bin/capture-review-videos.sh 04
+setup: Hidden: new game (tutorial skipped); the player is placed at the complaint property's inspection anchor and the random encounter catalog is emptied so only the UI flow is tested. The only setup teleport happens behind the title card.
+proves: The full camera/UI stress sequence from the brief: INSPECT, card, camera, CANCEL, camera, shutter, preview, RETAKE, camera, shutter, TAKE ANOTHER, camera, shutter, preview CANCEL, USE PHOTO, REVIEW & DECIDE, case sheet, BACK, BACK, world; then reopen, VIEW COMPLAINT / HIDE DETAILS, OPEN CASE, BACK, BACK, world, then movement works.
+movement: Setup placement only (hidden). After the UI test the player walks away by thumb drag to prove movement is restored.
+input: REAL taps on every button and on the HUD-drawn camera Cancel/shutter/zoom controls.
+known issues visible in the clip: Taking another photo from the same spot shows 'DUPLICATE - MOVE OR ZOOM' (the camera refuses identical framing); the player has to nudge the zoom. The ALBUM button was not opened in this clip.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 1214 Dogwood Lane
+  00:01  objective -> 310 Hawthorne Drive
+  00:05  state PROPERTY_CONTEXT
+  00:06  press TAKE PHOTO
+  00:07  state CAMERA
+  00:09  state PROPERTY_CONTEXT
+  00:11  press TAKE PHOTO
+  00:11  state CAMERA
+  00:14  state PHOTO_PREVIEW
+  00:17  press RETAKE
+  00:17  state CAMERA
+  00:20  state PHOTO_PREVIEW
+  00:23  press TAKE ANOTHER
+  00:23  state CAMERA
+  00:27  state PHOTO_PREVIEW
+  00:30  press CANCEL
+  00:30  state PROPERTY_CONTEXT
+  00:32  press TAKE ANOTHER
+  00:33  state CAMERA
+  00:38  state PHOTO_PREVIEW
+  00:41  press USE PHOTO
+  00:42  state PROPERTY_CONTEXT
+  00:44  press REVIEW & DECIDE
+  00:44  state CASE_DECISION
+  00:47  press < BACK
+  00:47  state PROPERTY_CONTEXT
+  00:49  press < BACK
+  00:49  state WORLD
+  00:52  state PROPERTY_CONTEXT
+  00:53  press VIEW COMPLAINT
+  00:54  state COMPLAINT_VIEW
+  00:56  press HIDE DETAILS
+  00:57  state PROPERTY_CONTEXT
+  00:58  press REVIEW & DECIDE
+  00:58  state CASE_DECISION
+  01:01  press < BACK
+  01:01  state PROPERTY_CONTEXT
+  01:03  press < BACK
+  01:03  state WORLD
+
+------------------------------------------------------------------------------
+05_reinspection_full_flow.mp4
+------------------------------------------------------------------------------
+duration: 01:17 (77.9 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 11.9 MB
+seed: 5055
+command: ./bin/capture-review-videos.sh 05
+setup: Hidden: a warning was issued on a house about 900-1700 px away, its cure period ends, the next morning's sweep creates a REINSPECTION assignment (internal calls: rule_case, next_day, _new_day), and it is selected. Recording starts before the walk. Random encounters disabled.
+proves: The previously broken reinspection interaction works through the UI: blue circular-arrow marker, REINSPECTION on the Next chip, walk, arrival, REINSPECT/INSPECT, the card, the reinspection panel, Back, reopen, photo, a real decision (CLOSE CASE), return to the world.
+movement: REAL. No teleport while recording.
+input: REAL taps/drag.
+known issues visible in the clip: The reinspection result in this run was PARTLY FIXED (random by seed). A discoverable-property prompt appears on the way.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 1216 Dogwood Lane
+  00:01  objective -> 143 Maple Grove Lane
+  00:01  objective -> 210 Maple Grove Lane
+  00:06  walk start (6049 px to go)
+  00:36  unstick: stepping around an obstacle
+  00:43  walk end (31 px from target)
+  00:47  state PROPERTY_CONTEXT
+  00:50  press INSPECT
+  00:50  state CASE_DECISION
+  00:54  press < BACK
+  00:54  state PROPERTY_CONTEXT
+  00:56  press TAKE PHOTO
+  00:56  state CAMERA
+  00:59  state PHOTO_PREVIEW
+  01:03  press USE PHOTO
+  01:03  state PROPERTY_CONTEXT
+  01:05  press INSPECT
+  01:06  state CASE_DECISION
+  01:09  press CLOSE CASE
+  01:09  objective -> 310 Hawthorne Drive
+  01:09  state WORLD
+
+------------------------------------------------------------------------------
+06_sidewalk_obstruction_case.mp4
+------------------------------------------------------------------------------
+duration: 01:21 (81.1 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 8.6 MB
+seed: 6066
+command: ./bin/capture-review-videos.sh 06
+setup: Hidden: a hedge obstruction on the public sidewalk of a nearby house is the complaint (staged by writing the assignment and refreshing the street); the showcase is marked seen; the homeowner scene 'I trimmed that hedge last month!' is queued with the QA hook so it plays after the warning.
+proves: The intentional sidewalk obstruction: marker, walk, the hedge across the walk, a detour over the verge, INSPECT, camera framed on the obstruction (house not centred), preview naming 'Recorded: Sidewalk obstruction', ruling, related homeowner scene, return.
+movement: REAL. No teleport while recording.
+input: REAL taps/drag/pinch.
+known issues visible in the clip: The detour around the hedge is tight: the autopilot was snagged three times (about 10 s) between the hedge, the verge and a neighbor's parked car before getting past. Reviewers should judge whether the obstruction leaves a comfortable route. A first take played the homeowner scene before the card (QA hook consumed too early) and was re-recorded.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 912 Stonebridge Way
+  00:01  objective -> 136 Maple Grove Lane
+  00:05  walk start (603 px to go)
+  00:07  walk end (12 px from target)
+  00:17  unstick: stepping around an obstacle
+  00:31  walk start (387 px to go)
+  00:33  walk end (18 px from target)
+  00:35  state PROPERTY_CONTEXT
+  00:39  press TAKE PHOTO
+  00:39  state CAMERA
+  00:43  state PHOTO_PREVIEW
+  00:48  press USE PHOTO
+  00:48  state PROPERTY_CONTEXT
+  00:50  press REVIEW & DECIDE
+  00:51  state CASE_DECISION
+  00:55  press WARNING
+  00:55  state CINEMATIC
+  01:08  press Offer to recheck Friday
+  01:13  objective -> 912 Stonebridge Way
+  01:13  state WORLD
+
+------------------------------------------------------------------------------
+07_cinematic_comedy_showcase.mp4
+------------------------------------------------------------------------------
+duration: 03:30 (210.0 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 14.0 MB
+seed: 7077
+command: ./bin/capture-review-videos.sh 07
+setup: Hidden: fresh game. Scene 1 is the real guaranteed first encounter. Scenes 2-8 are queued with the QA hook Encounters.force_next and played through the real _play_encounter path (camera push, HUD fade, panel, outcome, return).
+proves: Current encounter art and pacing: showcase (door, argument, sprinklers), filming (side entrance, phone), dog + garage, gnome wizard (side entrance), rare mud/dog chase, police, very rare ambulance + blanket, very rare car bump + blanket.
+movement: TELEPORT BETWEEN SCENES (disclosed): the screen dips to black while the player is placed at another house. This clip is a visual showcase, not a navigation test.
+input: REAL taps to advance every line and to choose every reply. The scenes themselves are started by an internal call (main._play_encounter), not by a ruling button.
+known issues visible in the clip: Characters are simple code-drawn figures; poses are limited and faces minimal. The bottom third of the close-up is dark when no choices are shown. Rare scenes are shown back to back here; in play they are rare.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> none
+  00:00  objective -> 143 Maple Grove Lane
+  00:05  state CINEMATIC
+  00:25  press Explain the complaint
+  00:32  state WORLD
+  00:39  state CINEMATIC
+  00:48  press Stay professional
+  00:56  state WORLD
+  01:02  state CINEMATIC
+  01:14  press Offer a treat
+  01:19  state WORLD
+  01:25  state CINEMATIC
+  01:35  press Ask for a plan
+  01:40  state WORLD
+  01:46  state CINEMATIC
+  01:58  press Get up with dignity
+  02:03  state WORLD
+  02:09  state CINEMATIC
+  02:22  press Explain calmly
+  02:30  state WORLD
+  02:37  state CINEMATIC
+  02:49  press Offer a ride to the clubhouse
+  02:58  state WORLD
+  03:04  state CINEMATIC
+  03:18  press Insist you're fine
+  03:25  state WORLD
+
+------------------------------------------------------------------------------
+08_alive_neighborhood_and_weather.mp4
+------------------------------------------------------------------------------
+duration: 01:24 (84.3 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 17.0 MB
+seed: 8088
+command: ./bin/capture-review-videos.sh 08
+setup: Hidden: new game, then the day is set to a weekday with Sunny weather (Weather.for_day); the stormy segment uses a later day whose real forecast is thunderstorms.
+proves: Ambient life (walkers, jogger, dog walker, mail carrier, gardeners, crew, neighbors chatting, visitor cars, parked cars, a porch resident) and the real weather system: a sunny weekday morning and then a thunderstorm day with its own morning brief, rain, gloom and lightning.
+movement: REAL in both segments. The day change between segments is done by an internal call hidden by a fade to black (the viewer sees the new day's real brief).
+input: REAL taps/drag; the CART button is used; the director's call on the storm morning is answered with a real tap.
+known issues visible in the clip: Which actors are close enough to see depends on the seed; some chases time out (see the log). The ambient crowd is small at this zoom. Rain/lightning contrast is moderate on a phone screen.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> 1010 Magnolia Court
+  00:01  objective -> 143 Maple Grove Lane
+  00:42  walk start (953 px to go)
+  00:46  walk end (12 px from target)
+  00:51  state CASE_DECISION
+  00:51  objective -> 140 Maple Grove Lane
+  00:54  press START THE DAY
+  00:58  answer: Hold my ground
+  01:01  state WORLD
+
+------------------------------------------------------------------------------
+09_false_complaint_and_borderline_case.mp4
+------------------------------------------------------------------------------
+duration: 01:26 (86.1 s)   size: 720x1280   fps: 30   codec: h264   audio: yes   file: 5.1 MB
+seed: 9099
+command: ./bin/capture-review-videos.sh 09
+setup: Hidden: fresh game started on day one (scripted first case and scripted FALSE complaint exist). Between cases the rest of day one is marked done and day two begins (internal calls hidden by a fade) so the scripted BORDERLINE grass report appears.
+proves: Complaint truth is not revealed early: the false 'bins at the curb' complaint looks identical to any other until investigated; the photo shows nothing; the case sheet says nothing seen; DISMISS. Then a borderline grass report: ambiguous, measuring tool, photo, case sheet.
+movement: REAL. No teleport while recording.
+input: REAL taps/drag (including MEASURE LAWN and the DISMISS button).
+known issues visible in the clip: After a photo of the borderline lawn the case sheet shows 'Measured 6.1 inches against a 6.0 inch limit' (the stored borderline note), which reads as a precise verdict. The lawn measuring tool itself is only opened and backed out of, not operated.
+
+timestamps (auto-logged by the driver; movie time):
+  00:00  state CASE_DECISION
+  00:00  objective -> none
+  00:00  objective -> 143 Maple Grove Lane
+  00:05  objective -> 145 Maple Grove Lane
+  00:10  walk start (227 px to go)
+  00:11  walk end (17 px from target)
+  00:14  state PROPERTY_CONTEXT
+  00:18  press TAKE PHOTO
+  00:18  state CAMERA
+  00:22  state PHOTO_PREVIEW
+  00:26  press USE PHOTO
+  00:27  state PROPERTY_CONTEXT
+  00:29  press REVIEW & DECIDE
+  00:29  state CASE_DECISION
+  00:34  press DISMISS
+  00:35  objective -> 143 Maple Grove Lane
+  00:35  state WORLD
+  00:39  state CASE_DECISION
+  00:42  press START THE DAY
+  00:45  state WORLD
+  00:51  walk start (175 px to go)
+  00:51  walk end (23 px from target)
+  00:55  state PROPERTY_CONTEXT
+  00:58  press MEASURE LAWN
+  00:59  state CASE_DECISION
+  01:03  press < BACK
+  01:03  state PROPERTY_CONTEXT
+  01:05  press TAKE PHOTO
+  01:05  state CAMERA
+  01:09  state PHOTO_PREVIEW
+  01:13  press USE PHOTO
+  01:13  state PROPERTY_CONTEXT
+  01:15  press REVIEW & DECIDE
+  01:15  state CASE_DECISION
+  01:20  press < BACK
+  01:20  state PROPERTY_CONTEXT
+  01:22  press < BACK
+  01:22  state WORLD

@@ -55,3 +55,29 @@ func save() -> void:
 func haptic(ms: int = 20) -> void:
 	if haptics and OS.has_feature("mobile"):
 		Input.vibrate_handheld(ms)
+
+
+## "0.1.34+35": marketing version plus build number. Read from res://VERSION (written by the
+## bump script) so the build shows too; falls back to the project's version setting.
+func full_version() -> String:
+	var file := FileAccess.open("res://VERSION", FileAccess.READ)
+	if file != null:
+		var text := file.get_as_text().strip_edges()
+		if text != "":
+			return text
+	return str(ProjectSettings.get_setting("application/config/version", "dev"))
+
+
+func version_name() -> String:
+	return full_version().split("+")[0]
+
+
+func build_number() -> int:
+	var parts := full_version().split("+")
+	return int(parts[1]) if parts.size() > 1 else 0
+
+
+## "v0.1.34 · build 35"
+func version_text() -> String:
+	var b := build_number()
+	return "v%s · build %d" % [version_name(), b] if b > 0 else "v%s" % version_name()

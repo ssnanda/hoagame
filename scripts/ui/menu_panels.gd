@@ -44,7 +44,7 @@ static func title_screen(host_size: Vector2, can_continue: bool, handlers: Dicti
 			Sfx.play("tap")
 			(handlers[str(item[0])] as Callable).call())
 		box.add_child(btn)
-	var foot := UiKit.label("%s\nDeveloped by %s" % [str(b.get("partner_line", "")), str(b.get("developer", ""))], 18, Color(1, 1, 1, 0.85), true)
+	var foot := UiKit.label("%s\nDeveloped by %s\n%s" % [str(b.get("partner_line", "")), str(b.get("developer", "")), Settings.version_text()], 18, Color(1, 1, 1, 0.85), true)
 	foot.custom_minimum_size = Vector2(host_size.x - 120.0, 60.0)
 	box.add_child(foot)
 	return root
@@ -164,12 +164,14 @@ static func settings(host_size: Vector2, on_close: Callable, on_reset: Callable)
 	return modal.root
 
 
-static func about(host_size: Vector2, on_close: Callable) -> Control:
+static func about(host_size: Vector2, on_close: Callable, update_status := "") -> Control:
 	var b := branding()
 	var modal := UiKit.modal(host_size, Vector2(640, 900), "ABOUT")
 	var body: VBoxContainer = modal.body
 	body.add_child(UiKit.label(str(b.get("title", "HOA PRESIDENT")), 40, UiKit.ACCENT, true))
-	body.add_child(UiKit.label("Version %s" % str(ProjectSettings.get_setting("application/config/version", "dev")), 20, UiKit.MUTED, true))
+	body.add_child(UiKit.label("Version %s" % Settings.version_text().trim_prefix("v"), 22, UiKit.INK, true))
+	if update_status != "":
+		body.add_child(UiKit.label(update_status, 18, UiKit.GOOD if update_status.begins_with("Up to date") else UiKit.MUTED, true))
 	body.add_child(UiKit.section("DEVELOPED BY"))
 	body.add_child(UiKit.label("%s\n%s" % [str(b.get("developer", "")), str(b.get("location", ""))], 26, UiKit.INK, true))
 	body.add_child(UiKit.section("COMMUNITY MANAGEMENT PARTNER / INSPIRATION"))
