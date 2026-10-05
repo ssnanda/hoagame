@@ -41,6 +41,7 @@ var player: PlayerController
 var ambient: Ambient
 var camera_ev: EvidenceCamera
 var world_view: Control
+var static_root: Node2D
 var hud_view: Control
 
 # State the views read.
@@ -70,7 +71,13 @@ var frame_info: Dictionary = {}
 var capturing := false
 var cart_pos := Vector2.ZERO
 var cart_heading := 0.0
+var cart_fx := 0.0           ## 1 -> 0 after getting in or out of the cart
+var _cart_slide := 0.0
 var debug_view := false
+var warm_up := false         ## true while a panel covers the street: redraw cached chunks faster
+var perf := {"process": 0.0, "world": 0.0, "hud": 0.0}   ## smoothed microseconds per frame (dev telemetry)
+var debug_scale := 0.0       ## dev tools: force the world zoom
+var debug_focus := Vector2.INF   ## dev tools: look at a fixed world point
 # Input state.
 var dragging := false
 var used := false
@@ -89,6 +96,9 @@ var _dusk_tween: Tween
 var _objective_check := 0.0
 var _cam_ready := false
 var _step_clock := 0.0
+var _audio_clock := 0.0
+var _bird_clock := 4.0
+var _bark_clock := 3.0
 
 
 func _ready() -> void:
@@ -103,9 +113,11 @@ func _ready() -> void:
 	camera_ev = EvidenceCamera.new()
 	for i in hood.lots.size():
 		grass.append(3.0)
+	static_root = Node2D.new()
+	add_child(static_root)
 	world_view = WorldView.new()
 	add_child(world_view)
-	world_view.setup(self)
+	world_view.setup(self, static_root)
 	hud_view = HudView.new()
 	add_child(hud_view)
 	hud_view.setup(self)
@@ -134,7 +146,7 @@ func lot_kind(i: int) -> String:
 
 
 func house_color(i: int) -> Color:
-	return world_view._styles[i].roof
+	return world_view.styles()[i].roof
 
 
 func _default_spawn() -> Vector2:
@@ -170,7 +182,8 @@ func set_day(new_pins: Dictionary, new_grass: Array, completed := 0, saved_posit
 				_static_obstacles.append(entry)
 			if entry.id in ["rv", "commercial_vehicle", "broken_vehicle", "hoop"]:
 				blocked_driveways[id] = true
-	ambient.setup(hood, GameState.day, GameState.weekday(), blocked_driveways)
+	ambient.setup(hood, GameState.day, GameState.weekday(), blocked_driveways, season)
+	world_view.invalidate()
 	if saved_position is Vector2 and hood.is_walkable(saved_position):
 		player.position = saved_position
 	else:
@@ -323,15 +336,27 @@ func inspect_near() -> void:
 ## The golf cart stays where you leave it. Walk back to it to drive again.
 func toggle_cart() -> void:
 	if player.cart:
+		# Step out beside the cart and leave it parked.
+		var side := Vector2.from_angle(player.angle + PI * 0.5) * 40.0
+		var exit_pos := player.position + side
+		if not hood.is_walkable(exit_pos):
+			exit_pos = player.position - side
 		player.cart = false
 		cart_pos = player.position
 		cart_heading = player.angle
+		if hood.is_walkable(exit_pos):
+			player.position = exit_pos
+		cart_fx = 1.0
 		photo_message = "CART PARKED HERE · on foot"
+		Sfx.play("tap")
 	else:
 		var gap := player.position.distance_to(cart_pos)
 		if gap <= 110.0:
 			player.cart = true
+			_cart_slide = 0.3
+			cart_fx = 1.0
 			photo_message = "GOLF CART · stays on the road"
+			Sfx.play("good")
 		else:
 			photo_message = "Your cart is %d ft away" % roundi(gap * 0.75)
 	photo_message_t = 2.0
@@ -352,6 +377,7 @@ func set_cart_state(state: Dictionary) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
+	var started := Time.get_ticks_usec()
 	time += delta
 	# Child views always cover the street exactly, whatever layout pass ran last.
 	for view: Control in [world_view, hud_view]:
@@ -368,6 +394,10 @@ func _process(delta: float) -> void:
 		if Input.is_action_just_pressed("ui_accept"):
 			inspect_near()
 	stick_hold = move_toward(stick_hold, 1.0 if dragging else 0.0, delta * 3.0)
+	cart_fx = maxf(0.0, cart_fx - delta * 2.5)
+	if _cart_slide > 0.0:
+		_cart_slide -= delta
+		player.position = player.position.lerp(cart_pos, 1.0 - exp(-16.0 * delta))
 	ambient.update(delta, player.position)
 	player.update(delta, move, hood, _nearby_obstacles(), ambient.circles())
 	player.smooth_heading(delta)
@@ -377,6 +407,7 @@ func _process(delta: float) -> void:
 			_step_clock = 0.0
 			Sfx.play("step")
 	_follow_camera(delta)
+	_update_audio(delta)
 	near = _nearest_lot()
 	_objective_check -= delta
 	if _objective_check <= 0.0:
@@ -384,8 +415,54 @@ func _process(delta: float) -> void:
 		_pick_objective()
 	if camera_ev.active:
 		frame_info = _evaluate_frame()
+	_place_static_root()
 	world_view.queue_redraw()
 	hud_view.queue_redraw()
+	perf.process = lerpf(float(perf.process), float(Time.get_ticks_usec() - started), 0.1)
+
+
+## Ambience follows what is near the inspector: traffic, the cart, crews, sprinklers, birds and dogs.
+func _update_audio(delta: float) -> void:
+	_audio_clock -= delta
+	_bird_clock -= delta
+	_bark_clock -= delta
+	if _audio_clock > 0.0 and _bird_clock > 0.0 and _bark_clock > 0.0:
+		return
+	var p := player.position
+	if _audio_clock <= 0.0:
+		_audio_clock = 0.25
+		Sfx.set_loop("hum", player.speed_fraction() if player.cart else 0.0)
+		var road := hood.edge_distance(p, -1, 0)
+		Sfx.set_loop("traffic", clampf(1.0 - maxf(road, 0.0) / 260.0, 0.0, 1.0))
+		var blower := 0.0
+		if season == 2:
+			for crew in ambient.crews:
+				blower = maxf(blower, 1.0 - p.distance_to(ambient.crew_worker_position(crew)) / 450.0)
+		Sfx.set_loop("blower", blower)
+		var spray := 0.0
+		if season == 1:
+			for lot: LotScript in hood.lots:
+				if lot.id % 4 == 0 and absf(lot.center.y - p.y) < 340.0:
+					spray = maxf(spray, 1.0 - p.distance_to(lot.center) / 320.0)
+		Sfx.set_loop("sprinkler", spray)
+	if _bird_clock <= 0.0:
+		_bird_clock = randf_range(3.0, 9.0)
+		if season <= 1 and dusk < 0.5:
+			Sfx.play("chirp")
+	if _bark_clock <= 0.0:
+		_bark_clock = randf_range(4.0, 8.0)
+		for w in ambient.walkers:
+			if bool(w.dog) and p.distance_to(ambient.walker_position(w)) < 220.0:
+				Sfx.play("bark")
+				break
+
+
+## The camera is just a transform on the cached world; dusk is a tint on it.
+func _place_static_root() -> void:
+	var sc := Vector2(world_scale, world_scale * WORLD_TILT)
+	var center := Vector2(size.x * 0.5, size.y * 0.54)
+	static_root.transform = Transform2D(0.0, sc, 0.0, center * (Vector2.ONE - sc) - cam * sc)
+	static_root.modulate = Color.WHITE.lerp(Color(0.5, 0.48, 0.8), clampf(dusk * 0.75, 0.0, 0.7))
 
 
 func _nearby_obstacles() -> Array:
@@ -403,6 +480,9 @@ func _follow_camera(delta: float) -> void:
 	var target_scale := 0.9 if player.moving else 1.0
 	if player.cart and player.moving:
 		target_scale = 0.84
+	target_scale -= 0.05 * cart_fx
+	if debug_scale > 0.0:
+		target_scale = debug_scale
 	if Settings.reduce_motion:
 		target_scale = 1.0
 	if camera_ev.active:
@@ -411,12 +491,15 @@ func _follow_camera(delta: float) -> void:
 	var look := Vector2.ZERO if Settings.reduce_motion else (player.velocity * 0.22).limit_length(70.0)
 	var focus := player.position + look
 	var target := Vector2(focus.x - size.x * 0.5, focus.y - size.y * 0.58)
+	if debug_focus != Vector2.INF:
+		target = debug_focus - size * 0.5
 	if camera_ev.active and near >= 0:
 		# Photographing: center the property in the viewfinder.
 		var frame := camera_ev.frame_rect(size)
 		target = hood.lots[near].center - Vector2(size.x * 0.5, frame.get_center().y)
-	target.x = clampf(target.x, 0.0, maxf(0.0, Neighborhood.WORLD_W - size.x))
-	target.y = clampf(target.y, 0.0, maxf(0.0, Neighborhood.WORLD_H - size.y))
+	if debug_focus == Vector2.INF:
+		target.x = clampf(target.x, 0.0, maxf(0.0, Neighborhood.WORLD_W - size.x))
+		target.y = clampf(target.y, 0.0, maxf(0.0, Neighborhood.WORLD_H - size.y))
 	if _cam_ready:
 		cam = cam.lerp(target, 1.0 - exp(-7.0 * delta))
 	else:
@@ -523,7 +606,7 @@ func take_photo() -> void:
 		photo_message_t = 2.2
 		return
 	var result := camera_ev.add_photo(house, lot_address(house), str(pins.get(house, "inspection")),
-			{"path": path, "time": stamp, "quality": quality, "documented": info.documented, "key": key})
+			{"path": path, "time": stamp, "day": GameState.day, "quality": quality, "documented": info.documented, "key": key})
 	var recorded: Array = []
 	for id in result.newly:
 		recorded.append(_label_for(house, str(id)))

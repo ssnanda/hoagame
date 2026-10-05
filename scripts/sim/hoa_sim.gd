@@ -25,6 +25,10 @@ var completed: Array = []
 ## Real violations visible on lots with no complaint: lot id -> allegations.
 var discoverable: Dictionary = {}
 var discovered_today := 0
+## Money trail and agenda decisions, shown in the Wozig portal.
+var ledger: Array = []
+var agenda_log: Array = []
+const DOLLARS_PER_POINT := 690
 var rng := RandomNumberGenerator.new()
 var _house_count := 0
 
@@ -43,6 +47,8 @@ func new_term() -> void:
 	assignments = {}
 	completed = []
 	discoverable = {}
+	ledger = []
+	agenda_log = []
 
 
 func load_world(world: Dictionary) -> void:
@@ -54,6 +60,8 @@ func load_world(world: Dictionary) -> void:
 	completed = (world.get("completed", []) as Array).duplicate()
 	discoverable = (world.get("discoverable", {}) as Dictionary).duplicate(true)
 	discovered_today = int(world.get("discovered_today", 0))
+	ledger = (world.get("ledger", []) as Array).duplicate(true)
+	agenda_log = (world.get("agenda_log", []) as Array).duplicate(true)
 
 
 func save_into(world: Dictionary) -> void:
@@ -65,6 +73,31 @@ func save_into(world: Dictionary) -> void:
 	world.completed = completed.duplicate()
 	world.discoverable = discoverable.duplicate(true)
 	world.discovered_today = discovered_today
+	world.ledger = ledger.duplicate(true)
+	world.agenda_log = agenda_log.duplicate(true)
+
+
+# ---------------------------------------------------------------- money and agenda
+
+## Records any treasury change in `effects` as dollars with a reason.
+func record_money(label: String, effects: Dictionary) -> void:
+	var points := int(effects.get("budget", 0))
+	if points == 0:
+		return
+	ledger.append({"day": GameState.day, "label": label, "dollars": points * DOLLARS_PER_POINT})
+	if ledger.size() > 80:
+		ledger.pop_front()
+
+
+func apply_effects(label: String, effects: Dictionary) -> void:
+	record_money(label, effects)
+	GameState.apply_effects(effects)
+
+
+func record_agenda(who: String, choice: String) -> void:
+	agenda_log.append({"day": GameState.day, "who": who, "choice": choice})
+	if agenda_log.size() > 40:
+		agenda_log.pop_front()
 
 
 # ---------------------------------------------------------------- lookups
@@ -136,17 +169,17 @@ func _daily_drift(day: int) -> void:
 	var happy: int = GameState.stats.get("happiness", 50)
 	var budget: int = GameState.stats.get("budget", 50)
 	var delta := {"budget": 1}   # dues
-	if budget > 65:
-		delta.budget = -ceili(float(budget - 65) / 4.0)   # reserves get spent
+	if budget > 60:
+		delta.budget = -ceili(float(budget - 60) / 3.0)   # reserves get spent
 	if power > 55:
-		delta.power = -ceili(float(power - 55) / 3.0)
+		delta.power = -ceili(float(power - 55) / 2.0)
 	elif power < 45:
 		delta.power = 1
 	if happy < 45:
 		delta.happiness = 2
 	elif happy > 65:
 		delta.happiness = -1
-	GameState.apply_effects(delta)
+	apply_effects("HOA dues" if int(delta.get("budget", 0)) >= 0 else "Reserve spending", delta)
 	for i in (politics.board as Array).size():
 		var support: int = int(politics.board[i].support)
 		if support < 50:
@@ -378,7 +411,7 @@ func rule_case(house: int, action: String, cited: Array, evidence: Dictionary) -
 				effects = {"power": 1}
 				Residents.shift(property, -6, GameState.day, "hearing scheduled")
 			"fine":
-				effects = {"budget": clampi(roundi(fine_amount / 40.0), 1, 12), "happiness": -(2 + max_severity), "power": 2}
+				effects = {"budget": clampi(roundi(fine_amount / 60.0), 1, 8), "happiness": -(2 + max_severity), "power": 2}
 				Residents.shift(property, -10, GameState.day, "fined")
 		points = 100 + 20 * documented_cited if correct else (-25 if cited.is_empty() else -75)
 		if not correct:
@@ -498,7 +531,7 @@ func resolve_reinspection(house: int, choice: String) -> Dictionary:
 				amount = 100
 			record.state = "fined"
 			record.cure_due = day + 2
-			effects = {"budget": clampi(roundi(amount / 40.0), 1, 12), "happiness": -3, "power": 2}
+			effects = {"budget": clampi(roundi(amount / 60.0), 1, 8), "happiness": -3, "power": 2}
 			Residents.shift(property, -10, day, "fined after reinspection")
 			property.repeat_count = int(property.get("repeat_count", 0)) + 1
 			lines.append("Fine issued after reinspection.")
@@ -518,9 +551,11 @@ func build_hearing(house: int) -> Dictionary:
 	var property: Dictionary = properties.get(house, {})
 	var strength := float(record.get("strength", 0.0))
 	var labels: Array = []
+	var rules: Array = []
 	for v in record.get("violations", []):
 		if str(v.id) in record.get("cited", []):
 			labels.append(str(v.label))
+			rules.append(str(violations.get_def(str(v.id)).get("description", "")))
 	var argument := "I did nothing wrong, and I have a lawyer who agrees."
 	if Residents.has_trait(property, "litigious"):
 		argument = "My attorney will note for the record that this is a very bad idea."
@@ -533,7 +568,7 @@ func build_hearing(house: int) -> Dictionary:
 	elif Residents.has_trait(property, "anti_hoa"):
 		argument = "This entire proceeding is an overreach and a scam."
 	var recommendation := "fine" if strength >= 0.6 else ("warning" if strength >= 0.3 else "dismiss")
-	return {"house": house, "owner": owner_of(house), "violations": labels, "argument": argument,
+	return {"house": house, "owner": owner_of(house), "violations": labels, "rules": rules, "argument": argument,
 			"strength": strength, "quality": int(record.get("evidence_quality", 0)),
 			"recommendation": recommendation, "fine_amount": int(record.get("fine_amount", 100)),
 			"relationship": relationship_text(house)}
@@ -566,7 +601,7 @@ func hold_hearing(house: int, recommendation: String, present_evidence: bool) ->
 				var amount := int(record.get("fine_amount", 100)) + 25 * int(property.get("repeat_count", 0))
 				record.state = "fined"
 				record.cure_due = GameState.day + 2
-				effects = {"budget": clampi(roundi(amount / 40.0), 1, 12), "happiness": -3, "power": 2}
+				effects = {"budget": clampi(roundi(amount / 60.0), 1, 8), "happiness": -3, "power": 2}
 				lines.append("Hearing: %d to %d. Fine upheld ($%d)." % [yes, total - yes, amount])
 				Residents.shift(property, -8, GameState.day, "fined at hearing")
 			else:
@@ -623,7 +658,7 @@ func _process_cases(day: int, hearings: Array) -> Array:
 				var win := 0.85 if bool(record.get("false_complaint", false)) else clampf((1.0 - strength) * 0.8, 0.1, 0.8)
 				if rng.randf() < win:
 					record.state = "overturned"
-					GameState.apply_effects({"budget": -6, "happiness": 3})
+					apply_effects("Dispute settlement", {"budget": -6, "happiness": 3})
 					board.add_legal(politics, 6)
 					Residents.shift(property, 8, day, "dispute upheld")
 					lines.append("Dispute upheld at %s. Citation withdrawn." % address)
@@ -647,12 +682,12 @@ func _process_projects() -> Array:
 	for project in projects:
 		var daily: Dictionary = project.get("daily", {})
 		apply_political(daily)
-		GameState.apply_effects(daily)
+		apply_effects(str(project.get("name", "Project")), daily)
 		project.days = int(project.get("days", 1)) - 1
 		if int(project.days) <= 0:
 			var finish: Dictionary = project.get("finish", {})
 			apply_political(finish)
-			GameState.apply_effects(finish)
+			apply_effects(str(project.get("name", "Project")) + " finished", finish)
 			lines.append("%s finished." % str(project.get("name", "Project")))
 		else:
 			lines.append("%s: %d day(s) left." % [str(project.get("name", "Project")), int(project.days)])
@@ -671,7 +706,7 @@ func _process_politics(day: int) -> Array:
 	else:
 		board.add_legal(politics, -2)
 	if legal_risk() >= 100:
-		GameState.apply_effects({"budget": -25, "power": -8})
+		apply_effects("Lawsuit settlement", {"budget": -36, "power": -8})
 		politics.legal = 40
 		lines.append("A lawsuit settles for $25,000. The board is not pleased.")
 	elif legal_risk() >= 70:

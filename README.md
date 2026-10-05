@@ -27,6 +27,14 @@ Complaint → travel → observe → investigate → photograph → decide → c
   members with their own priorities vote.
 - **Politics.** Board support, legal risk (including selective enforcement) and an annual
   meeting every ten days decide whether you keep your seat.
+- **Seasons.** Spring tulips and rain, summer sprinklers and pool swimmers, fall leaf piles
+  and leaf blowers, winter snow caps and holiday lights. Violations follow the calendar
+  (no tall grass under snow).
+- **Wozig portal.** Overview with enforcement balance by group, cases, board, finance
+  ledger, violation history, resident directory, work orders and agenda decisions.
+- **Audio.** Procedural sounds and ambience layers (traffic, cart, leaf blower, sprinklers,
+  birds, dogs, board murmur). iOS audio uses the Ambient session, so the silent switch is
+  respected; sound, music and haptics have separate settings.
 
 ## Running
 
@@ -48,6 +56,20 @@ godot --headless --path . res://tools/smoke_test.tscn -- bot=smart # plays whole
 In a debug build, MENU → DEBUG VIEW overlays lot polygons, house footprints, driveways, the
 inspection radius, violation slots and property ids. World validation prints at startup.
 
+## Performance model
+
+The street is drawn in two layers. The **static world** (ground, roads, street furniture,
+every lot with its house, yard objects and trees) is recorded once per day/season into
+cached canvas chunks (`world_chunk.gd`, one per lot) and the camera is just a transform on
+their root node; time of day is a tint on it. Only people, moving vehicles, markers,
+weather and the HUD are redrawn each frame. Stale chunks near the camera are redrawn a
+few per frame (more while a panel covers the street) so a new day never hitches.
+
+Measured on a 2019 MacBook Pro (AMD Radeon Pro 5500M), steady state while walking the
+avenue: ~7 ms per frame, with ~1.5 ms of that in GDScript. Before the chunk cache the
+world draw alone cost 45-65 ms. `street.perf` exposes smoothed process/world/HUD
+microseconds for tuning.
+
 ## Architecture
 
 ```
@@ -65,7 +87,9 @@ scripts/
     player_controller.gd  walking / golf cart movement and collision
     ambient.gd         walkers, traffic, trucks, crews, kids, parked cars
     evidence_camera.gd framing quality, what a photo documents, multi-photo album
-    world_view.gd      draws the world; house_painter / object_painter / actor_painter / draw_util
+    static_painter.gd  everything that holds still, drawn into cached chunks (world_chunk.gd)
+    world_view.gd      dynamic layer: people, vehicles, markers, weather; owns the chunks
+    house_painter / object_painter / actor_painter / draw_util   shared drawing code
     hud_view.gd        mobile HUD, camera frame, minimap, full map, album
     debug_overlay.gd   geometry debug drawing
   sim/
@@ -115,3 +139,7 @@ not use the device camera, upload photos or collect analytics.
 - Bundle identifiers and signing are unchanged. Customer-facing developer name is ITSpector LLC
   (AltStore metadata); the bundle id stays `com.ssnanda.hoagame`.
 - iOS 27-only APIs are not used: the installed Xcode SDK was 26.5 when this was written.
+  Layout is driven by the display safe area and a width-fixed, height-expanding stretch, so
+  taller iPhones (Pro Max sizes) need no code change; verified at 414x896 and 720x1280.
+- Godot writes a `.uid` file next to each script. Commit them (the repo already tracks them).
+- `tools/` is excluded from exported builds.

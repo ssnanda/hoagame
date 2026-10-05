@@ -97,6 +97,25 @@ func fairness_gap(state: Dictionary) -> float:
 	return clampf(float(critics[1]) - float(favored[1]), 0.0, 1.0)
 
 
+## Enforcement rate per political group among valid violations, for the dashboard.
+func group_rates(state: Dictionary) -> Array:
+	var rows: Array = []
+	for g in ["friend", "board", "neutral", "critic", "legal"]:
+		var t: Dictionary = state.enforce.get(g, {})
+		var cases := int(t.get("cases", 0))
+		rows.append({"group": g, "cases": cases, "rate": float(t.get("enforced", 0)) / maxf(float(cases), 1.0)})
+	return rows
+
+
+func fairness_label(state: Dictionary) -> String:
+	var gap := fairness_gap(state)
+	if gap > 0.4:
+		return "Targeted"
+	if gap > 0.2:
+		return "Leaning"
+	return "Even-handed"
+
+
 func counsel_warning(state: Dictionary) -> String:
 	if fairness_gap(state) > 0.35:
 		return "Recent enforcement appears disproportionately focused on critics of the board."

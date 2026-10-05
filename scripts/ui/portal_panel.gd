@@ -30,12 +30,15 @@ func _ready() -> void:
 	var head := modal.root.get_child(0).get_child(0) as VBoxContainer
 	head.add_child(UiKit.label("WOZIG MANAGEMENT PORTAL", 26, UiKit.ACCENT, true))
 	head.move_child(head.get_child(head.get_child_count() - 1), 0)
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
+	var tabs := GridContainer.new()
+	tabs.columns = 4
+	tabs.add_theme_constant_override("h_separation", 6)
+	tabs.add_theme_constant_override("v_separation", 6)
 	head.add_child(tabs)
 	head.move_child(tabs, 1)
-	for t in [["overview", "OVERVIEW"], ["cases", "CASES"], ["properties", "HOMES"], ["board", "BOARD"]]:
-		var b := UiKit.button(str(t[1]), 18, 52)
+	for t in [["overview", "OVERVIEW"], ["cases", "CASES"], ["board", "BOARD"], ["finance", "FINANCE"],
+			["properties", "HISTORY"], ["directory", "DIRECTORY"], ["work", "WORK ORDERS"], ["requests", "REQUESTS"]]:
+		var b := UiKit.button(str(t[1]), 15, 46)
 		b.pressed.connect(func():
 			_tab = str(t[0])
 			_render())
@@ -58,6 +61,14 @@ func _render() -> void:
 			_properties()
 		"board":
 			_board()
+		"finance":
+			_finance()
+		"directory":
+			_directory()
+		"work":
+			_work_orders()
+		"requests":
+			_requests()
 
 
 func _overview() -> void:
@@ -74,6 +85,22 @@ func _overview() -> void:
 		enforced += int(sim.politics.enforce[g].enforced)
 		cases += int(sim.politics.enforce[g].cases)
 	_body.add_child(UiKit.label("Enforced %d of %d valid violations." % [enforced, cases], 20, UiKit.MUTED))
+	_body.add_child(HSeparator.new())
+	_body.add_child(UiKit.section("ENFORCEMENT BALANCE · %s" % sim.board.fairness_label(sim.politics).to_upper()))
+	var names := {"friend": "Friends", "board": "Board insiders", "neutral": "Neutral", "critic": "Critics", "legal": "Litigious"}
+	for row in sim.board.group_rates(sim.politics):
+		var line := HBoxContainer.new()
+		_body.add_child(line)
+		var label := UiKit.label("%s  (%d cases)" % [str(names[row.group]), int(row.cases)], 17, UiKit.MUTED)
+		label.custom_minimum_size = Vector2(250, 0)
+		line.add_child(label)
+		var bar := ProgressBar.new()
+		bar.show_percentage = false
+		bar.value = float(row.rate) * 100.0
+		bar.custom_minimum_size = Vector2(0, 16)
+		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(bar)
+	_body.add_child(UiKit.label("Share of valid violations enforced against each group. Big gaps invite lawsuits.", 15, UiKit.MUTED))
 	var warning: String = sim.board.counsel_warning(sim.politics)
 	if warning != "":
 		_body.add_child(HSeparator.new())
@@ -139,6 +166,62 @@ func _board() -> void:
 static func _money(points: int) -> String:
 	var dollars := points * 690
 	var s := str(dollars)
+	var out := ""
+	for i in s.length():
+		if i > 0 and (s.length() - i) % 3 == 0:
+			out += ","
+		out += s[i]
+	return out
+
+
+func _finance() -> void:
+	var total := 0
+	for entry in sim.ledger:
+		total += int(entry.dollars)
+	_body.add_child(UiKit.label("Treasury  $%s" % _money(int(GameState.stats.get("budget", 0))), 30))
+	_body.add_child(UiKit.label("Net recorded  %s$%s" % ["+" if total >= 0 else "-", _money_abs(total)], 20, UiKit.GOOD if total >= 0 else UiKit.BAD))
+	_body.add_child(HSeparator.new())
+	if sim.ledger.is_empty():
+		_body.add_child(UiKit.label("No transactions yet.", 20, UiKit.MUTED))
+	var recent: Array = sim.ledger.duplicate()
+	recent.reverse()
+	for entry in recent.slice(0, 40):
+		var amount := int(entry.dollars)
+		_body.add_child(UiKit.label("Day %d · %s   %s$%s" % [int(entry.day), str(entry.label), "+" if amount >= 0 else "-", _money_abs(amount)],
+				18, UiKit.GOOD if amount >= 0 else UiKit.BAD))
+
+
+func _directory() -> void:
+	var ids: Array = sim.properties.keys()
+	ids.sort_custom(func(a, b): return street.lot_address(int(a)) < street.lot_address(int(b)))
+	for house in ids:
+		var p: Dictionary = sim.properties[house]
+		var traits: Array = p.get("traits", [])
+		var blurb := str(Residents.TRAIT_BLURBS.get(traits[0], "")) if not traits.is_empty() else ""
+		_body.add_child(UiKit.label("%s · %s" % [street.lot_address(int(house)), str(p.owner)], 19))
+		_body.add_child(UiKit.label("%s · %s" % [Residents.relationship_label(int(p.relationship)), blurb], 14, UiKit.MUTED))
+
+
+func _work_orders() -> void:
+	if sim.projects.is_empty():
+		_body.add_child(UiKit.label("No active work orders. Approve a vendor bid or community project to start one.", 20, UiKit.MUTED))
+	for project in sim.projects:
+		_body.add_child(UiKit.label("%s" % str(project.get("name", "Project")), 22))
+		_body.add_child(UiKit.label("%d day(s) remaining" % int(project.get("days", 0)), 16, UiKit.MUTED))
+
+
+func _requests() -> void:
+	if sim.agenda_log.is_empty():
+		_body.add_child(UiKit.label("No board agenda decisions yet.", 20, UiKit.MUTED))
+	var recent: Array = sim.agenda_log.duplicate()
+	recent.reverse()
+	for entry in recent:
+		_body.add_child(UiKit.label("Day %d · %s" % [int(entry.day), str(entry.who)], 19))
+		_body.add_child(UiKit.label("Decision: %s" % str(entry.choice), 15, UiKit.MUTED))
+
+
+static func _money_abs(dollars: int) -> String:
+	var s := str(absi(dollars))
 	var out := ""
 	for i in s.length():
 		if i > 0 and (s.length() - i) % 3 == 0:

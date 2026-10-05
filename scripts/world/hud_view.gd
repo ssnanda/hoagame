@@ -81,6 +81,12 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	if ctx == null or ctx.capturing:
 		return
+	var started := Time.get_ticks_usec()
+	_draw_hud()
+	ctx.perf.hud = lerpf(float(ctx.perf.hud), float(Time.get_ticks_usec() - started), 0.1)
+
+
+func _draw_hud() -> void:
 	_draw_ui()
 	if ctx.camera_ev.active:
 		_draw_camera_frame()
@@ -518,7 +524,7 @@ func _draw_gallery() -> void:
 			draw_texture_rect(tex, big, false)
 		var y := big.end.y + 34.0
 		var lot: LotScript = ctx.hood.lots[int(item.house)]
-		draw_string(font, Vector2(big.position.x, y), "%s · %s" % [lot.address, str(photo.get("time", "")).replace("T", " ")],
+		draw_string(font, Vector2(big.position.x, y), "%s · Day %d · %s" % [lot.address, int(photo.get("day", 0)), str(photo.get("time", "")).replace("T", " ")],
 				HORIZONTAL_ALIGNMENT_LEFT, big.size.x, 22, Color("1d3340"))
 		var is_best := int(entry.get("best", -1)) == int(item.index)
 		draw_string(font, Vector2(big.position.x, y + 30.0), "Quality %d%%%s" % [int(photo.get("quality", 0)), " · BEST PHOTO" if is_best else ""],
@@ -549,7 +555,7 @@ func _draw_gallery() -> void:
 			var lot2: LotScript = ctx.hood.lots[int(item2.house)]
 			draw_string(font, cell.position + Vector2(0.0, img_rect.size.y + 22.0), lot2.address, HORIZONTAL_ALIGNMENT_LEFT, cell.size.x, 16, Color("1d3340"))
 			draw_string(font, cell.position + Vector2(0.0, img_rect.size.y + 44.0),
-					"%s · %d%% · %d noted" % [str(photo2.get("time", "")).substr(5, 5), q, (photo2.get("documented", []) as Array).size()],
+					"Day %d · %d%% · %d noted" % [int(photo2.get("day", 0)), q, (photo2.get("documented", []) as Array).size()],
 					HORIZONTAL_ALIGNMENT_LEFT, cell.size.x, 14, Color("2f9e57") if q >= 70 else Color("b3261e"))
 	for spec in [[Rect2(panel.position.x + 20.0, panel.end.y - 76.0, 110.0, 56.0), "PREV"],
 			[Rect2(panel.position.x + 140.0, panel.end.y - 76.0, 110.0, 56.0), "NEXT"],

@@ -63,6 +63,7 @@ func build() -> void:
 			_gen_bulb_lots(street, bulb)
 	for street in streets:
 		_gen_straight_lots(street)
+	_mark_corners()
 	_number_lots()
 	_plant_trees()
 
@@ -369,6 +370,30 @@ func _shrink(poly: PackedVector2Array, about: Vector2, k: float) -> PackedVector
 	for p in poly:
 		result.append(about + (p - about) * k)
 	return result
+
+
+## A lot whose side boundary runs close to another street is a corner lot. It gets
+## landscaping along that second edge (the world view draws a hedge there).
+func _mark_corners() -> void:
+	for lot in lots:
+		if lot.kind == "cul_de_sac":
+			continue
+		var best := INF
+		var edge := PackedVector2Array()
+		var n: int = lot.polygon.size()
+		for i in n:
+			var a: Vector2 = lot.polygon[i]
+			var b: Vector2 = lot.polygon[(i + 1) % n]
+			var mid := (a + b) * 0.5
+			if edge_distance(mid, -1, lot.street_id) < WALK_W + 6.0:
+				continue   # the frontage edge
+			var d := edge_distance(mid, lot.street_id)
+			if d < best:
+				best = d
+				edge = PackedVector2Array([a, b])
+		if best < 150.0 and not edge.is_empty():
+			lot.kind = "corner"
+			lot.corner_edge = edge
 
 
 func _number_lots() -> void:

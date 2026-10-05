@@ -98,6 +98,8 @@ func _ready() -> void:
 		check.set_meta("id", str(v.id))
 		check.toggled.connect(func(_on): _refresh_actions())
 		box.add_child(check)
+		if str(v.get("rule", "")) != "":
+			box.add_child(UiKit.label("Rule: %s" % str(v.rule), 15, UiKit.MUTED))
 		_checks.append(check)
 
 	column.add_child(HSeparator.new())

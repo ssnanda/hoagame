@@ -12,8 +12,8 @@ static func rr(c: CanvasItem, rect: Rect2, color: Color, radius: int) -> void:
 
 static func ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, color: Color) -> void:
 	var pts := PackedVector2Array()
-	for k in 20:
-		var a := TAU * k / 20.0
+	for k in 12:
+		var a := TAU * k / 12.0
 		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
 	c.draw_colored_polygon(pts, color)
 

@@ -30,12 +30,14 @@ static func make_style(lot: LotScript) -> Dictionary:
 		"chimney": rng.randf() < 0.55 or arch == 3,
 		"ac": rng.randf() < 0.7,
 		"chimney_y": rng.randf_range(-0.3, 0.3),
+		"garage_open": rng.randf() < 0.14,
+		"lights": rng.randf() < 0.7,
 		"garage_color": Color("c9cdd2").lerp(Color("8a8f98"), rng.randf() * 0.5),
 	}
 
 
 static func draw(c: CanvasItem, base: Transform2D, lot: LotScript, style: Dictionary,
-		center: Vector2, focus_scale: float, dusk: float, time: float, entries: Array) -> void:
+		center: Vector2, focus_scale: float, dusk: float, time: float, entries: Array, season := 0) -> void:
 	ActorPainter.place(c, base, center, lot.rotation(), focus_scale)
 	var dx := lot.house_size.x
 	var dy := lot.house_size.y
@@ -54,6 +56,10 @@ static func draw(c: CanvasItem, base: Transform2D, lot: LotScript, style: Dictio
 	if style.pool:
 		DrawUtil.rr(c, Rect2(-hx - 56.0, -hy * 0.35, 40.0, hy * 0.7), Color("e8f1f2"), 6)
 		DrawUtil.rr(c, Rect2(-hx - 52.0, -hy * 0.3, 32.0, hy * 0.6), Color("4aa9c7").lerp(Color("25465d"), dusk * 0.6), 5)
+		if season == 1:
+			# Summer: people in the pool.
+			for k in 2:
+				c.draw_circle(Vector2(-hx - 40.0 + sin(time * 0.8 + k * 2.0) * 6.0, float(k - 0.5) * 18.0 + cos(time + k) * 4.0), 3.5, Color("f2c29b"))
 	if style.fence:
 		for k in range(-int(hy) - 6, int(hy) + 6, 12):
 			c.draw_rect(Rect2(-hx - 58.0, float(k) - 2.0, 4.0, 4.0), Color("efe0bd"))
@@ -66,6 +72,9 @@ static func draw(c: CanvasItem, base: Transform2D, lot: LotScript, style: Dictio
 			c.draw_line(Vector2(-hx + 2.0, by), Vector2(hx - 2.0, by), Color(0.2, 0.1, 0.07, 0.25), 1.5)
 			by += 8.0
 	_roof(c, lot.archetype, hx - 5.0, hy - 5.0, roof)
+	if season == 3:
+		# Snow cap on the back half of the roof.
+		c.draw_rect(Rect2(-hx + 6.0, -hy + 6.0, hx - 4.0, dy - 12.0), Color(0.95, 0.97, 1.0, 0.72))
 	if style.solar:
 		for row in 2:
 			for col in 3:
@@ -82,12 +91,26 @@ static func draw(c: CanvasItem, base: Transform2D, lot: LotScript, style: Dictio
 	DrawUtil.rr(c, Rect2(hx - 4.0, drive_lat - gw * 0.5, 8.0, gw), style.garage_color, 2)
 	for k in 3:
 		c.draw_line(Vector2(hx - 3.0, drive_lat - gw * 0.5 + (k + 1) * gw / 4.0), Vector2(hx + 3.0, drive_lat - gw * 0.5 + (k + 1) * gw / 4.0), Color(0, 0, 0, 0.25), 1.0)
+	if style.garage_open:
+		DrawUtil.rr(c, Rect2(hx - 14.0, drive_lat - gw * 0.5 + 2.0, 16.0, gw - 4.0), Color("1b1d22"), 2)
+		DrawUtil.rr(c, Rect2(hx - 12.0, drive_lat - gw * 0.5 + 8.0, 9.0, gw - 16.0), Color("6d7480"), 2)
 	var door_y := -ds * hy * 0.35
 	DrawUtil.rr(c, Rect2(hx - 2.0, door_y - 16.0, 16.0, 32.0), Color("d8c6a3").lerp(Color("6c6280"), dusk * 0.5), 3)
 	DrawUtil.rr(c, Rect2(hx + 2.0, door_y - 7.0, 6.0, 14.0), Color("56372b"), 2)
 	for lamp in [-1.0, 1.0]:
 		c.draw_circle(Vector2(hx + 5.0, door_y + lamp * 15.0), 3.0, Color("ffd36e"))
 		c.draw_circle(Vector2(hx + 5.0, drive_lat + lamp * (gw * 0.5 + 4.0)), 2.5, Color("ffd36e"))
+	if season == 3:
+		# Holiday lights along the front eave and a wreath on the door.
+		if style.lights:
+			var tick := int(time * 2.0)
+			for k in range(int(-hy) + 6, int(hy) - 4, 11):
+				var lit := (k / 11 + tick) % 3
+				c.draw_circle(Vector2(hx - 1.0, float(k)), 2.6, [Color("ff4d4d"), Color("ffd33d"), Color("4dd2ff")][lit])
+				if dusk > 0.2:
+					c.draw_circle(Vector2(hx - 1.0, float(k)), 6.0, Color(1, 0.95, 0.6, 0.25 * dusk))
+		c.draw_circle(Vector2(hx + 9.0, door_y), 5.0, Color("2f7a4a"), false, 2.5)
+		c.draw_circle(Vector2(hx + 9.0, door_y - 4.0), 1.8, Color("d94b45"))
 	if dusk > 0.05:
 		DrawUtil.ellipse(c, Vector2(hx + 8.0, door_y), 20.0, 16.0, Color("ffd36e", 0.5 * dusk))
 		for wy in [-hy * 0.6, hy * 0.6]:

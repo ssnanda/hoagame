@@ -19,7 +19,7 @@ var parked: Array = []       ## {lot, kind: driveway|curb, color}
 var _rng := RandomNumberGenerator.new()
 
 
-func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: Dictionary) -> void:
+func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: Dictionary, season := 0) -> void:
 	hood = neighborhood
 	_rng.seed = day * 7919 + 13
 	var weekend := weekday >= 5
@@ -41,9 +41,10 @@ func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: D
 			traffic.append({"kind": "garbage", "dir": -1, "s": _rng.randf_range(0.0, hood.streets[0].length), "speed": 48.0,
 					"color": Color("2f9e57"), "pause": 0.0, "travel": 0.0, "next_stop": _rng.randf_range(200.0, 500.0)})
 	crews.clear()
+	var crew_kind: String = {0: "mower", 1: "mower", 2: "blower", 3: "shovel"}[season]
 	if not weekend:
 		for k in 3:
-			crews.append({"lot": _rng.randi_range(0, hood.lots.size() - 1), "phase": _rng.randf_range(0.0, TAU)})
+			crews.append({"lot": _rng.randi_range(0, hood.lots.size() - 1), "phase": _rng.randf_range(0.0, TAU), "kind": crew_kind})
 	kids.clear()
 	var bulbs: Array = []
 	for street in hood.streets:

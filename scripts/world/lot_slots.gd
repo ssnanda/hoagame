@@ -42,7 +42,7 @@ static func _spot(lot: LotScript, name: String) -> Vector2:
 		"backyard":
 			return lot.local_point(-hx - 28.0, -ds * hy * 0.4)
 		"back_side":
-			return lot.local_point(-hx - 30.0, ds * (hy - 26.0))
+			return lot.local_point(-hx - 26.0, ds * (hy - 34.0))
 		"fence_line":
 			return lot.local_point(-8.0, -ds * (hy + 10.0))
 	return lot.center

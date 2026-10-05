@@ -27,8 +27,12 @@ func _ready() -> void:
 	body.add_child(UiKit.label("\"%s\"" % str(data.get("argument", "")), 24, UiKit.INK))
 	body.add_child(HSeparator.new())
 	body.add_child(UiKit.section("THE FILE"))
-	for label in data.get("violations", []):
-		body.add_child(UiKit.label("• %s" % str(label), 22))
+	var rules: Array = data.get("rules", [])
+	var labels: Array = data.get("violations", [])
+	for i in labels.size():
+		body.add_child(UiKit.label("• %s" % str(labels[i]), 22))
+		if i < rules.size() and str(rules[i]) != "":
+			body.add_child(UiKit.label("Rule: %s" % str(rules[i]), 15, UiKit.MUTED))
 	var quality := int(data.get("quality", 0))
 	body.add_child(UiKit.label("Evidence quality %d%%" % quality, 19, UiKit.GOOD if quality >= 60 else UiKit.BAD))
 	body.add_child(UiKit.section("STAFF RECOMMENDATION"))

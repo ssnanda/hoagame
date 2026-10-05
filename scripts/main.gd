@@ -348,6 +348,8 @@ func _resume_run() -> void:
 	_street.set_discoverable(sim.discoverable.keys())
 	_street.set_case_states(sim.case_states())
 	_street.set_cart_state(world.get("cart", {}))
+	if int(world.get("objective", -1)) >= 0:
+		_street.set_objective(int(world.get("objective", -1)))
 	_update_task()
 	_refresh()
 	_float("WELCOME BACK", Color("ffd36e"))
@@ -372,6 +374,7 @@ func _save_progress(show_feedback := false) -> void:
 		"measurements": _measurements.duplicate(true),
 		"player_position": _street.get_player_position(),
 		"cart": _street.get_cart_state(),
+		"objective": _street.objective,
 	}
 	sim.save_into(world)
 	GameState.save_run(world)
@@ -446,7 +449,8 @@ func _open_case_sheet(house: int) -> void:
 		var reading: Dictionary = _measurements.get(house, {})
 		if str(v.id) == "tall_grass" and bool(reading.get("precise", false)) and float(reading.get("reading", 99.0)) <= 6.0:
 			cleared = true
-		rows.append({"id": v.id, "label": v.label, "documented": seen, "cleared": cleared})
+		rows.append({"id": v.id, "label": v.label, "documented": seen, "cleared": cleared,
+				"rule": str(sim.violations.get_def(str(v.id)).get("description", ""))})
 		if seen:
 			notes.append("%s: %s" % [str(v.label), str(v.borderline_note) if bool(v.borderline) and str(v.borderline_note) != "" else "clearly visible in the photo."])
 		elif cleared:
@@ -493,7 +497,7 @@ func _reliability_word(value: float) -> String:
 func _on_case_ruled(action: String, cited: Array) -> void:
 	var house := _active
 	var result := sim.rule_case(house, action, cited, _evidence_for(house))
-	_apply_result(result)
+	_apply_result(result, "%s · %s" % ["Fine" if action == "fine" else ("Wrongful citation" if not bool(result.correct) else "Enforcement"), _street.lot_address(house)])
 	_finish_case(house)
 
 
@@ -501,14 +505,14 @@ func _on_reinspection_choice(choice: String) -> void:
 	var house := _active
 	var result := sim.resolve_reinspection(house, choice)
 	result.correct = true
-	_apply_result(result)
+	_apply_result(result, "Reinspection · %s" % _street.lot_address(house))
 	_finish_case(house)
 
 
-func _apply_result(result: Dictionary) -> void:
+func _apply_result(result: Dictionary, label := "Case ruling") -> void:
 	var correct = result.get("correct", null)
 	var gained := GameState.add_score(int(result.points), correct)
-	GameState.apply_effects(result.effects)
+	sim.apply_effects(label, result.effects)
 	_close_overlay()
 	if _is_over:
 		return
@@ -564,12 +568,13 @@ func _run_hearing(house: int) -> void:
 	var info := sim.build_hearing(house)
 	info.address = _street.lot_address(house)
 	_overlay.show()
+	Sfx.set_loop("murmur", 0.8)
 	var panel: Panel = HearingPanel.new()
 	panel.setup(info)
 	panel.decided.connect(func(recommendation: String, present: bool):
 		_close_overlay()
 		var result := sim.hold_hearing(house, recommendation, present)
-		GameState.apply_effects(result.effects)
+		sim.apply_effects("Hearing · %s" % _street.lot_address(house), result.effects)
 		GameState.add_score(40)
 		_street.set_case_states(sim.case_states())
 		var votes_panel: Panel = VotePanel.new()
@@ -593,6 +598,7 @@ func _run_meeting(votes: Array) -> void:
 		sim.board.shift(sim.politics, 4)
 		lines.append("Re-elected! +%d points." % bonus)
 	_overlay.show()
+	Sfx.set_loop("murmur", 0.8)
 	var panel: Panel = VotePanel.new()
 	panel.setup("ANNUAL MEETING", lines, votes, "CONTINUE")
 	panel.closed.connect(func():
@@ -643,8 +649,9 @@ func _on_event_swiped(side: String) -> void:
 	sim.apply_political(effects)
 	if choice.has("project"):
 		sim.projects.append((choice.project as Dictionary).duplicate(true))
+	sim.record_agenda(str(data.get("who", "Agenda")), str(choice.get("label", side)))
 	GameState.add_score(25)
-	GameState.apply_effects(effects)
+	sim.apply_effects(str(data.get("who", "Agenda item")), effects)
 	_close_overlay()
 	_save_progress(true)
 	_refresh()
@@ -688,6 +695,7 @@ func _show_evening(finished: int, bonus: Dictionary) -> void:
 # ---------------------------------------------------------------- HUD
 
 func _close_overlay() -> void:
+	Sfx.set_loop("murmur", 0.0)
 	for child in _overlay.get_children():
 		child.queue_free()
 	_card = null
@@ -765,6 +773,7 @@ func _float_small(text: String) -> void:
 func _process(_delta: float) -> void:
 	if not is_instance_valid(_street) or _street.house_count() == 0:
 		return
+	_street.warm_up = _overlay.visible or is_instance_valid(_title) or is_instance_valid(_modal)
 	_update_hint()
 
 

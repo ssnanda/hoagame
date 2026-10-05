@@ -5,8 +5,8 @@ extends Node
 ##   godot --headless --path . res://tools/smoke_test.tscn
 
 const MainScene := preload("res://scenes/main.tscn")
-const TERMS := 5
-const DAYS := 16
+const TERMS := 6
+const DAYS := 24
 
 ## Strategy (pass after "--"): bot=random | smart | fine_all | dismiss_all
 var bot := "random"
@@ -108,7 +108,7 @@ func _play_day() -> void:
 		# the camera says there is something worth recording.
 		for zoom in [1.4, 1.0, 1.8, 2.2]:
 			street.camera_ev.zoom = zoom
-			for i in 40:
+			for i in 18:
 				await get_tree().process_frame
 			if bool(street.frame_info.get("potential", false)):
 				break

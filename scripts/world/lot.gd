@@ -15,6 +15,7 @@ var center := Vector2.ZERO           ## house footprint center
 var front := Vector2.DOWN            ## unit vector from the house toward its street
 var house_size := Vector2(112, 140)  ## x = front-to-back depth, y = frontage width
 var polygon := PackedVector2Array()  ## lot boundary, world space
+var corner_edge := PackedVector2Array()  ## side of a corner lot that faces the other street (2 points)
 var curb := Vector2.ZERO             ## where the driveway meets the sidewalk
 var driveway_end := Vector2.ZERO     ## where the driveway meets the house
 var driveway_width := 40.0

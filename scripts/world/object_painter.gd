@@ -28,10 +28,13 @@ static func yard_object(c: CanvasItem, base: Transform2D, entry: Dictionary, pos
 				c.draw_line(q, q + Vector2(sin(k) * 4.0, -16.0), Color("c9d84a"), 3.0, true)
 				c.draw_circle(q + Vector2(0, -17), 3.0, Color("f7e05a"))
 		"dead_tree":
-			c.draw_line(Vector2(0, 14), Vector2(0, -6), Color("5b4634"), 8.0, true)
-			for k in 5:
-				var a := -PI * 0.5 + (k - 2) * 0.55
-				c.draw_line(Vector2(0, -6), Vector2(0, -6) + Vector2.from_angle(a) * 26.0, Color("6b5a4a"), 3.0, true)
+			DrawUtil.ellipse(c, Vector2(8, 10), 30.0, 22.0, Color(0, 0, 0, 0.18))
+			c.draw_line(Vector2(0, 16), Vector2(0, -8), Color("5b4634"), 10.0, true)
+			for k in 7:
+				var a := -PI * 0.5 + (k - 3) * 0.5
+				var tip := Vector2(0, -8) + Vector2.from_angle(a) * (30.0 + (k % 2) * 8.0)
+				c.draw_line(Vector2(0, -8), tip, Color("6b5a4a"), 3.5, true)
+				c.draw_line(tip, tip + Vector2.from_angle(a + 0.6) * 10.0, Color("6b5a4a"), 2.0, true)
 		"landscaping":
 			for k in 6:
 				var q := Vector2.from_angle(k * 1.1) * (10.0 + k * 3.0)
@@ -90,8 +93,9 @@ static func yard_object(c: CanvasItem, base: Transform2D, entry: Dictionary, pos
 				if dusk > 0.1:
 					c.draw_circle(Vector2(-25 + k * 10, 24), 6.0, Color(1, 0.9, 0.5, 0.25 * dusk))
 		"shrubs":
-			for k in 4:
-				DrawUtil.ellipse(c, Vector2(-30 + k * 20, sin(k * 2.0) * 5.0), 20.0, 17.0, Color("1f6b43").lightened(k * 0.04))
+			for k in 5:
+				DrawUtil.ellipse(c, Vector2(-40 + k * 20, sin(k * 2.0) * 6.0), 25.0, 21.0, Color("1f6b43").lightened(k * 0.04))
+				c.draw_circle(Vector2(-40 + k * 20, sin(k * 2.0) * 6.0 - 6.0), 9.0, Color("2f8a52"))
 		"debris":
 			DrawUtil.rr(c, Rect2(-24, -20, 48, 40), Color("d9822b"), 3)
 			c.draw_rect(Rect2(-24, -20, 48, 40), Color("8a4f12"), false, 2.0)
