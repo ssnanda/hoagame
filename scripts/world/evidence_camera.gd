@@ -35,10 +35,18 @@ func evaluate(lot: LotScript, player: Vector2, to_screen: Callable, view_size: V
 		min_p = Vector2(minf(min_p.x, sp.x), minf(min_p.y, sp.y))
 		max_p = Vector2(maxf(max_p.x, sp.x), maxf(max_p.y, sp.y))
 	var house := Rect2(min_p, max_p - min_p)
+	# Some issues are about a spot, not the house: frame that spot (e.g. a blocked sidewalk).
+	var focus_pos := lot.center
+	for entry: Dictionary in entries:
+		if str(entry.id) == "sidewalk_obstruction":
+			var sp: Vector2 = to_screen.call(entry.pos)
+			house = Rect2(sp - Vector2(80.0, 60.0), Vector2(160.0, 120.0))
+			focus_pos = entry.pos
+			break
 	var coverage := 0.0
 	if house.get_area() > 0.0:
 		coverage = house.intersection(frame).get_area() / house.get_area()
-	var dist := player.distance_to(lot.center)
+	var dist := player.distance_to(focus_pos)
 	var dist_factor := clampf(1.0 - (dist - 70.0) / 200.0, 0.15, 1.0)
 	var zoom_factor := 1.0 if zoom >= 1.2 and zoom <= 2.0 else 0.6
 	var blocked := 0.0
@@ -53,6 +61,11 @@ func evaluate(lot: LotScript, player: Vector2, to_screen: Callable, view_size: V
 	if coverage >= 0.35 and dist_factor > 0.3:
 		for entry: Dictionary in entries:
 			if frame.has_point(to_screen.call(entry.pos)):
+				documented.append(str(entry.id))
+	elif not entries.is_empty() and dist_factor > 0.3:
+		# Evidence that sits in frame still counts even if the house itself is not centred.
+		for entry: Dictionary in entries:
+			if not bool(entry.on_house) and frame.grow(-20.0).has_point(to_screen.call(entry.pos)):
 				documented.append(str(entry.id))
 	return {"quality": roundi(quality), "documented": documented, "potential": not documented.is_empty()}
 

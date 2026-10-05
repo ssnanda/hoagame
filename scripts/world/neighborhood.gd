@@ -7,7 +7,7 @@ const LotScript := preload("res://scripts/world/lot.gd")
 
 const WORLD_W := 2200.0
 const WORLD_H := 8600.0
-const WALK_W := 30.0
+const WALK_W := 46.0
 const AVENUE_HALF := 58.0
 const STREET_HALF := 44.0
 const BULB_R := 104.0
@@ -23,6 +23,9 @@ const ARM_YS_RIGHT := [1900.0, 3000.0, 4100.0, 5200.0, 6300.0, 7400.0]
 const BULB_LOTS := 6
 const BULB_ENTRY_GAP := 0.62    ## radians kept clear on each side of the street mouth
 const BUCKET := 256.0
+const DECOR_DEPTH := 38.0       ## yard decoration never sits further than this in front of the house (keeps the mailbox/walk clear)
+const VERGE := 30.0             ## forgiving grass strip beyond the sidewalk that is still walkable
+const FRONT_LAWN_DEPTH := 10.0  ## how far in front of the house line the inspector may cut across the lawn
 
 ## Footprint (front-to-back depth, frontage width) per house archetype.
 ## 0 ranch, 1 two-story, 2 craftsman, 3 brick traditional, 4 modern, 5 narrow-lot
@@ -49,6 +52,7 @@ var landmarks: Array = []
 var street_trees: Array[Vector3] = []
 var woods_trees: Array[Vector3] = []
 var _buckets: Dictionary = {}
+var _lot_buckets: Dictionary = {}
 var _bulbs: Array = []
 var _rng := RandomNumberGenerator.new()
 var _name_shift := 0
@@ -58,6 +62,7 @@ var _name_shift := 0
 ## 7771 is the shipped neighborhood. QA can sweep other seeds with tools/validate_world.gd.
 func build(seed_value := 7771) -> void:
 	_rng.seed = seed_value
+	_lot_buckets.clear()
 	_name_shift = 0 if seed_value == 7771 else seed_value % STREET_NAMES.size()
 	_make_streets()
 	_make_landmarks()
@@ -69,6 +74,10 @@ func build(seed_value := 7771) -> void:
 		_gen_straight_lots(street)
 	_mark_corners()
 	_number_lots()
+	for lot in lots:
+		_snap_sidewalk_spot(lot)
+	_lot_buckets.clear()
+	_index_lots()
 	_plant_trees()
 
 
@@ -186,13 +195,61 @@ func street_at(p: Vector2) -> int:
 	return found
 
 
-## True for road, sidewalk and driveway surface the inspector may stand on.
+## True for road, sidewalk, the grass verge beside it, driveways and the open front lawn.
+## Deliberately forgiving: touch input is imprecise, so the corridor is wider than the
+## drawn sidewalk. Houses, side yards and back yards stay off limits.
 func is_walkable(p: Vector2) -> bool:
 	if p.x < 4.0 or p.x > WORLD_W - 4.0 or p.y < 4.0 or p.y > WORLD_H - 4.0:
 		return false
-	if edge_distance(p) <= WALK_W * 0.8:
+	var ed := edge_distance(p)
+	if ed <= WALK_W + VERGE:
+		return not _in_house_zone(p)
+	if driveway_at(p) >= 0:
 		return true
-	return driveway_at(p) >= 0
+	return _front_lawn_at(p) >= 0
+
+
+func _in_house_zone(p: Vector2) -> bool:
+	for lot: LotScript in _lots_near(p, 60.0):
+		if Geometry2D.is_point_in_polygon(p, lot.footprint(4.0)):
+			return true
+	return false
+
+
+## Lot id whose open front lawn contains `p`, else -1. The front lawn is the part of the lot
+## between the house front and the sidewalk, away from the side boundaries.
+func _front_lawn_at(p: Vector2) -> int:
+	for lot: LotScript in _lots_near(p, 120.0):
+		if not Geometry2D.is_point_in_polygon(p, lot.polygon):
+			continue
+		var rel: Vector2 = p - lot.center
+		var forward: float = rel.dot(lot.front)
+		var lateral: float = absf(rel.dot(lot.right()))
+		if forward > lot.house_size.x * 0.5 + FRONT_LAWN_DEPTH and lateral < lot.house_size.y * 0.5 + 6.0:
+			return lot.id
+	return -1
+
+
+## Frame for sidewalk assistance: unit tangent of the nearest street, and the vector from
+## `p` to the sidewalk centerline. Empty when `p` is not near a sidewalk.
+func sidewalk_frame(p: Vector2) -> Dictionary:
+	var best := INF
+	var tangent := Vector2.ZERO
+	var closest := Vector2.ZERO
+	var half := 0.0
+	for entry in _buckets.get(int(floor(p.y / BUCKET)), []):
+		var q := Geometry2D.get_closest_point_to_segment(p, entry[1], entry[2])
+		var d := q.distance_to(p)
+		if d < best:
+			best = d
+			closest = q
+			tangent = ((entry[2] as Vector2) - (entry[1] as Vector2)).normalized()
+			half = float(entry[3])
+	if best == INF or best - half > WALK_W + VERGE:
+		return {}
+	var out := (p - closest).normalized()
+	var center := closest + out * (half + WALK_W * 0.5)
+	return {"tangent": tangent, "to_center": center - p, "dist": best - half}
 
 
 func driveway_at(p: Vector2) -> int:
@@ -205,10 +262,25 @@ func driveway_at(p: Vector2) -> int:
 
 func _lots_near(p: Vector2, radius: float) -> Array:
 	var result: Array = []
-	for lot in lots:
-		if absf(lot.center.y - p.y) < radius + 150.0 and lot.center.distance_to(p) < radius + 260.0:
-			result.append(lot)
+	var span := int(ceil((radius + 150.0) / BUCKET))
+	var key0 := int(floor(p.y / BUCKET))
+	if _lot_buckets.is_empty() and not lots.is_empty():
+		_index_lots()
+	for key in range(key0 - span, key0 + span + 1):
+		for lot in _lot_buckets.get(key, []):
+			if absf(lot.center.y - p.y) < radius + 150.0 and lot.center.distance_to(p) < radius + 260.0:
+				result.append(lot)
 	return result
+
+
+## Lots bucketed by their centre's y so spatial queries stay cheap.
+func _index_lots() -> void:
+	_lot_buckets.clear()
+	for lot in lots:
+		var key := int(floor(lot.center.y / BUCKET))
+		if not _lot_buckets.has(key):
+			_lot_buckets[key] = []
+		_lot_buckets[key].append(lot)
 
 
 # ---------------------------------------------------------------- landmarks
@@ -400,6 +472,17 @@ func _mark_corners() -> void:
 			lot.corner_edge = edge
 
 
+## Finds the sidewalk centerline point beside each driveway, on straight streets and bulbs alike.
+func _snap_sidewalk_spot(lot) -> void:
+	var ds: float = signf((lot.driveway_end - lot.center).dot(lot.right()))
+	if ds == 0.0:
+		ds = 1.0
+	var p: Vector2 = lot.curb + lot.right() * ds * (lot.driveway_width * 0.5 + 56.0)
+	for _i in 5:
+		p += lot.front * (edge_distance(p, -1, lot.street_id) - WALK_W * 0.5)
+	lot.sidewalk_spot = p
+
+
 func _number_lots() -> void:
 	for street in streets:
 		var mine: Array = []
@@ -439,9 +522,11 @@ func _plant_trees() -> void:
 			while s < street.length - 60.0:
 				var smp := sample(street, s)
 				var t: Vector2 = smp[1]
-				var p: Vector2 = smp[0] + Vector2(-t.y, t.x) * float(side) * (street.half + WALK_W + 12.0)
-				if _tree_site_clear(p, street.id):
-					street_trees.append(Vector3(p.x, p.y, _rng.randf_range(20.0, 30.0)))
+				# Canopy edge stays outside the sidewalk: centre = sidewalk edge + gap + 0.8 * radius.
+				var radius := _rng.randf_range(18.0, 26.0)
+				var p: Vector2 = smp[0] + Vector2(-t.y, t.x) * float(side) * (street.half + WALK_W + 8.0 + radius * 0.8)
+				if _tree_site_clear(p, street.id, radius):
+					street_trees.append(Vector3(p.x, p.y, radius))
 				s += _rng.randf_range(150.0, 230.0)
 	for mark in landmarks:
 		if str(mark.type) != "woods":
@@ -452,11 +537,13 @@ func _plant_trees() -> void:
 					_rng.randf_range(26.0, 46.0)))
 
 
-func _tree_site_clear(p: Vector2, own: int) -> bool:
+func _tree_site_clear(p: Vector2, own: int, radius := 24.0) -> bool:
 	if edge_distance(p, own) < WALK_W + 4.0 or not landmark_at(p).is_empty():
 		return false
 	for lot in _lots_near(p, 40.0):
-		if lot.curb.distance_to(p) < 62.0 or lot.mailbox.distance_to(p) < 34.0:
+		# Keep canopies off the driveway apron, mailbox and the public inspection point.
+		if lot.curb.distance_to(p) < 62.0 + radius or lot.mailbox.distance_to(p) < 34.0 + radius \
+				or lot.inspect_anchor().distance_to(p) < 40.0 + radius:
 			return false
 	return true
 
@@ -491,7 +578,69 @@ func validate() -> Array:
 	for key in per_bulb:
 		if int(per_bulb[key]) < 4:
 			warnings.append("Cul-de-sac %s has only %d homes" % [key, int(per_bulb[key])])
+	warnings.append_array(_sidewalk_warnings())
+	warnings.append_array(_decor_warnings())
 	return warnings
+
+
+## Fixed yard decoration (shrubs, mulch beds, the door-side ornament, flowers, summer dead patch) sits
+## at known spots in front of the house. None of it may touch the public walk, the inspection anchor
+## or the mailbox. (Seasonal piles are placed by the painter with the same clearance rule.)
+func _decor_warnings() -> Array:
+	var out: Array = []
+	for lot: LotScript in lots:
+		var hx: float = lot.house_size.x * 0.5
+		var hy: float = lot.house_size.y * 0.5
+		var ds: float = -lot.decor_side()      # decoration side is -ds in the painter's formulas
+		var items: Array = []
+		for k in 4:
+			items.append([lot.local_point(hx + 8.0, -ds * hy * (0.12 + k * 0.17)), 15.0])      # shrub + mulch bed
+		items.append([lot.local_point(hx + 34.0, -ds * hy * 0.42), 8.0])                       # gnome / flag / spinner
+		items.append([lot.local_point(hx + 28.0, -ds * hy * 0.4), 20.0])                       # summer dead patch
+		for k in 5:
+			items.append([lot.local_point(hx + 22.0, -ds * (hy * 0.15 + k * 11.0)), 3.0])      # spring flowers
+		for item in items:
+			var p: Vector2 = item[0]
+			var r: float = item[1]
+			if edge_distance(p, -1, lot.street_id) < WALK_W + r * 0.5:
+				out.append("Lot %d (%s): yard decoration reaches the public walk" % [lot.id, lot.address])
+				break
+			if p.distance_to(lot.mailbox) < r + 10.0:
+				out.append("Lot %d (%s): yard decoration covers the mailbox" % [lot.id, lot.address])
+				break
+			if p.distance_to(lot.inspect_anchor()) < r + 16.0:
+				out.append("Lot %d (%s): yard decoration covers the inspection anchor" % [lot.id, lot.address])
+				break
+	return out
+
+
+## Every tree (lot, street, woods) within `radius` of `p`.
+func _trees_near(p: Vector2, radius: float) -> Array:
+	var result: Array = []
+	for lot in _lots_near(p, radius):
+		for tree in lot.trees:
+			result.append(tree)
+	for tree in street_trees:
+		if absf(tree.y - p.y) < radius and absf(tree.x - p.x) < radius:
+			result.append(tree)
+	return result
+
+
+## Walks every sidewalk centerline: a tree trunk or canopy must not cover the walking corridor.
+func _sidewalk_warnings() -> Array:
+	var out: Array = []
+	for street in streets:
+		for side in [-1, 1]:
+			var s := 40.0
+			while s < street.length - 20.0:
+				var smp := sample(street, s)
+				var t: Vector2 = smp[1]
+				var c: Vector2 = (smp[0] as Vector2) + Vector2(-t.y, t.x) * float(side) * (street.half + WALK_W * 0.5)
+				for tree in street_trees:
+					if absf(tree.y - c.y) < 60.0 and Vector2(tree.x, tree.y).distance_to(c) < tree.z * 0.7:
+						out.append("%s: tree at (%d,%d) blocks the sidewalk" % [street.name, int(tree.x), int(tree.y)])
+				s += 24.0
+	return out
 
 
 ## Flood-fills the walkable surface from `start` and reports every lot whose
@@ -516,7 +665,7 @@ func unreachable_lots(start: Vector2, step := 14.0) -> Array:
 	var missing: Array = []
 	for lot in lots:
 		var near_reached := false
-		var target: Vector2 = lot.driveway_mid()
+		var target: Vector2 = lot.inspect_anchor()
 		for dx in [-1, 0, 1]:
 			for dy in [-1, 0, 1]:
 				if seen.has(Vector2i(roundi(target.x / step) + dx, roundi(target.y / step) + dy)):

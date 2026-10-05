@@ -6,6 +6,7 @@ extends Panel
 const UiKit := preload("res://scripts/ui/ui_kit.gd")
 
 signal ruled(action: String, cited: Array)
+signal closed                       ## player backed out without ruling
 
 const PANEL_SIZE := Vector2(640, 1000)
 const ACTION_LABELS := {"dismiss": "DISMISS", "warning": "WARNING", "hearing": "HEARING", "fine": "FINE"}
@@ -33,6 +34,11 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
 	margin.add_child(column)
+	var back := UiKit.button("< BACK", 20, 60)
+	back.custom_minimum_size = Vector2(140, 60)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	back.pressed.connect(func(): closed.emit())
+	column.add_child(back)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -138,6 +144,23 @@ func _refresh_actions() -> void:
 		if not bool(option.enabled) and str(option.reason) != "" and not str(option.reason) in reasons:
 			reasons.append("%s: %s" % [str(ACTION_LABELS[action]).capitalize(), str(option.reason)])
 	_reason.text = "\n".join(reasons)
+	# One procedurally sensible action gets the spotlight; the rest stay available but quiet.
+	var recommended := "warning" if not _cited().is_empty() else "dismiss"
+	for action in _buttons:
+		var btn := _buttons[action] as Button
+		if action == recommended and not btn.disabled:
+			for state in ["normal", "hover", "pressed"]:
+				var box := StyleBoxFlat.new()
+				box.bg_color = UiKit.GOLD if state != "pressed" else UiKit.GOLD.darkened(0.15)
+				box.set_corner_radius_all(14)
+				btn.add_theme_stylebox_override(state, box)
+			for slot in ["font_color", "font_hover_color", "font_pressed_color"]:
+				btn.add_theme_color_override(slot, UiKit.INK)
+		else:
+			for state in ["normal", "hover", "pressed"]:
+				btn.remove_theme_stylebox_override(state)
+			for slot in ["font_color", "font_hover_color", "font_pressed_color"]:
+				btn.remove_theme_color_override(slot)
 
 
 func _choose(action: String) -> void:

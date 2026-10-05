@@ -7,6 +7,9 @@ signal visit(house: int)
 signal photo_taken(house: int, quality: int, usable: bool, documented: Array)
 signal evidence_changed
 signal discover(house: int)
+signal camera_exit(reason: String)          ## "cancel": left the viewfinder without a photo
+signal photo_captured(pending: Dictionary)  ## a framed shot waiting for the player to accept it
+signal arrived(house: int)                  ## reached the selected assignment
 
 const Neighborhood := preload("res://scripts/world/neighborhood.gd")
 const CameraInput := preload("res://scripts/world/camera_input.gd")
@@ -98,6 +101,9 @@ var finger := Vector2.ZERO
 var stick := Vector2.ZERO
 var stick_hold := 0.0
 
+var ui_locked := false       ## main sets this while any panel owns the screen: no walking, no taps in the world
+var preview_enabled := false ## main turns this on: photos wait for USE PHOTO instead of saving at once
+var camera_from_card := false
 var cine_house := -1         ## >=0: camera pushes in on this property for a close-up encounter
 var slow_t := 0.0            ## seconds of reduced walking speed left
 var user_zoom := 1.0         ## pinch multiplier on top of the automatic walking zoom
@@ -115,6 +121,9 @@ var _step_clock := 0.0
 var _audio_clock := 0.0
 var _thunder_played := false
 var _bump_cd := 0.0
+var _arrived_for := -1
+var _arrival_zoom_from := 1.0
+var _arrival_zoom_to := 0.0
 var _street_clock := 0.0
 var _player_street := -1
 var _bird_clock := 4.0
@@ -217,6 +226,16 @@ func set_day(new_pins: Dictionary, new_grass: Array, completed := 0, saved_posit
 	_pick_objective()
 
 
+## Removes parked cars from a lot so the onboarding property is easy to reach and photograph.
+func clear_lot_parking(house: int) -> void:
+	ambient.parked = ambient.parked.filter(func(p): return int(p.lot) != house)
+	world_view.invalidate()
+
+
+func spawn_point() -> Vector2:
+	return _default_spawn()
+
+
 func get_player_position() -> Vector2:
 	return player.position
 
@@ -265,19 +284,30 @@ func set_objective(house: int) -> void:
 	objective = house
 
 
+## Player picked a destination (map or Next chip): update the marker, cue and arrival state together.
+func select_objective(house: int) -> void:
+	objective = house
+	_arrived_for = -1
+	photo_message = "NEXT · %s" % lot_address(house)
+	photo_message_t = 2.0
+	Sfx.play("tap")
+
+
 ## Tapping the "Next" chip hops to the next open assignment, nearest first.
 func cycle_objective() -> void:
+	_arrived_for = -1
 	var open: Array = []
 	for house in pins:
 		if pins[house] in ACTIVE_KINDS:
 			open.append(int(house))
 	if open.is_empty():
 		return
-	open.sort_custom(func(a, b): return player.position.distance_to(hood.lots[a].driveway_mid()) < player.position.distance_to(hood.lots[b].driveway_mid()))
+	open.sort_custom(func(a, b): return player.position.distance_to(hood.lots[a].inspect_anchor()) < player.position.distance_to(hood.lots[b].inspect_anchor()))
 	var at := open.find(objective)
 	objective = open[(at + 1) % open.size()]
-	photo_message = "WAYPOINT · %s" % lot_address(objective)
+	photo_message = "NEXT · %s" % lot_address(objective)
 	photo_message_t = 2.0
+	Sfx.play("tap")
 
 
 func _pick_objective() -> void:
@@ -287,7 +317,7 @@ func _pick_objective() -> void:
 	objective = -1
 	for house in pins:
 		if pins[house] in ACTIVE_KINDS:
-			var d := player.position.distance_to(hood.lots[int(house)].driveway_mid())
+			var d := player.position.distance_to(hood.lots[int(house)].inspect_anchor())
 			if d < best:
 				best = d
 				objective = int(house)
@@ -357,7 +387,7 @@ func reset_zoom() -> void:
 
 
 func _overlay_open() -> bool:
-	return hud_view.map_open or hud_view.gallery_open or camera_ev.active or cine_house >= 0
+	return ui_locked or hud_view.map_open or hud_view.gallery_open or camera_ev.active or cine_house >= 0
 
 
 ## Camera push-in toward the front door; `end_cinematic` eases back to normal play.
@@ -377,6 +407,8 @@ func apply_slow(seconds: float) -> void:
 
 
 func _tap(pos: Vector2) -> void:
+	if ui_locked:
+		return          # a panel owns the screen: nothing leaks through to the world
 	if hud_view.handle_tap(pos):
 		return
 	# Tapping the highlighted home itself also opens the case.
@@ -396,7 +428,7 @@ func inspect_near() -> void:
 		discover.emit(near)
 		return
 	var kind: String = pins.get(near, "")
-	if kind == "lawn" or kind == "card":
+	if kind in ACTIVE_KINDS:     # complaint (lawn/card) or reinspection: all open the same property card
 		visit.emit(near)
 	else:
 		say("Inspection complete. Case on file." if kind == "done" else QUIPS[randi() % QUIPS.size()])
@@ -470,6 +502,8 @@ func _process(delta: float) -> void:
 	slow_t = maxf(0.0, slow_t - delta)
 	player.speed_mult = 0.6 if slow_t > 0.0 else 1.0
 	ambient.update(delta, player.position)
+	if not ambient.gag.is_empty() and bool(ambient.gag.get("fresh", false)):
+		Sfx.play("bark")
 	var before := player.position
 	player.update(delta, move, hood, _nearby_obstacles(), ambient.circles())
 	# Collision feedback: pushing the cart into something gives a thump and a tap of haptics.
@@ -490,6 +524,26 @@ func _process(delta: float) -> void:
 	_follow_camera(delta)
 	_update_audio(delta)
 	near = _nearest_lot()
+	# Arrival feedback: a quiet cue the first time you stand at the selected assignment.
+	if near >= 0 and near == objective and pins.get(near, "") in ACTIVE_KINDS:
+		if _arrived_for != near:
+			_arrived_for = near
+			Settings.haptic(18)
+			Sfx.play("notify")
+			photo_message = "%s · PROPERTY REACHED" % lot_address(near)
+			photo_message_t = 2.4
+			arrived.emit(near)
+			# Mild framing assist: ease in a little if the player is zoomed out. They keep control.
+			if not Settings.reduce_motion and zoom_input.target < 1.1:
+				_arrival_zoom_from = zoom_input.target
+				zoom_input.target = 1.15
+				_arrival_zoom_to = 1.15
+	elif near != _arrived_for:
+		_arrived_for = -1
+		# Walking away: hand the old zoom back, unless the player changed it themselves.
+		if _arrival_zoom_to > 0.0 and absf(zoom_input.target - _arrival_zoom_to) < 0.001:
+			zoom_input.target = _arrival_zoom_from
+		_arrival_zoom_to = 0.0
 	_objective_check -= delta
 	if _objective_check <= 0.0:
 		_objective_check = 1.0
@@ -578,7 +632,7 @@ func _follow_camera(delta: float) -> void:
 	if Settings.reduce_motion:
 		target_scale = 1.0
 	if cine_house >= 0 and not Settings.reduce_motion:
-		target_scale = 1.9
+		target_scale = 2.3
 	user_zoom = lerpf(user_zoom, zoom_input.target, 1.0 - exp(-10.0 * delta))
 	if camera_ev.active:
 		target_scale = camera_ev.zoom
@@ -620,7 +674,7 @@ func _nearest_lot() -> int:
 	for lot: LotScript in hood.lots:
 		if absf(lot.center.y - player.position.y) > NEAR_DIST + 120.0:
 			continue
-		var d := player.position.distance_to(lot.driveway_mid())
+		var d := player.position.distance_to(lot.inspect_anchor())
 		if lot.street_id != _player_street and d > 70.0:
 			continue
 		var active: bool = pins.get(lot.id, "") in ACTIVE_KINDS
@@ -639,14 +693,23 @@ func to_screen(world: Vector2) -> Vector2:
 	return center + (world - cam - center) * scale
 
 
-func open_camera() -> void:
+func open_camera(from_card := false) -> void:
+	camera_from_card = from_card
 	if near >= 0 and pins.get(near, "") in ACTIVE_KINDS:
 		camera_ev.active = true
 		camera_ev.zoom = 1.4
-		photo_message = "FRAME THE PROPERTY"
+		photo_message = "FRAME THE ISSUE"
 	else:
 		photo_message = "MOVE CLOSER TO INSPECT"
 	photo_message_t = 2.0
+
+
+## Leaves the viewfinder without taking a photo.
+func cancel_camera() -> void:
+	if not camera_ev.active:
+		return
+	camera_ev.active = false
+	camera_exit.emit("cancel")
 
 
 func _evaluate_frame() -> Dictionary:
@@ -668,9 +731,16 @@ func _obstructors(lot: LotScript) -> Array:
 	for tree in hood.street_trees:
 		if lot.center.distance_to(Vector2(tree.x, tree.y)) < 140.0:
 			result.append(tree)
+	# Vehicles standing between the street and the house also block part of the view.
+	for entry: Dictionary in ambient.obstacles():
+		var vp: Vector2 = entry.pos
+		if absf(vp.y - lot.center.y) < 160.0 and vp.distance_to(lot.center) < 150.0 and not str(entry.get("src", "")).begins_with("traffic"):
+			result.append(Vector3(vp.x, vp.y, 30.0))
 	return result
 
 
+## Frames the shot. With `preview_enabled` the result waits in `photo_captured` for the
+## player to accept it; otherwise (bots, tests) it is saved immediately.
 func take_photo() -> void:
 	var info := _evaluate_frame()
 	if near < 0:
@@ -690,7 +760,6 @@ func take_photo() -> void:
 		photo_taken.emit(house, quality, false, [])
 		return
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
-	var path := "user://evidence-lot-%03d-%s.png" % [house, stamp]
 	# Hide the HUD for a frame so the saved photo is just the framed scene.
 	var image: Image
 	if DisplayServer.get_name() == "headless":
@@ -711,25 +780,46 @@ func take_photo() -> void:
 	region = region.intersection(Rect2i(0, 0, image.get_width(), image.get_height()))
 	if region.has_area():
 		image = image.get_region(region)
-	var error := image.save_png(path)
+	var pending := {"house": house, "image": image, "stamp": stamp, "quality": quality, "documented": info.documented, "key": key}
+	camera_flash = 1.0
 	camera_ev.active = false
+	if preview_enabled:
+		photo_captured.emit(pending)
+	else:
+		commit_photo(pending)
+
+
+## Saves an accepted shot and attaches it to the property's evidence.
+func commit_photo(pending: Dictionary) -> bool:
+	var house: int = pending.house
+	var path := "user://evidence-lot-%03d-%s.png" % [house, str(pending.stamp)]
+	var error := (pending.image as Image).save_png(path)
 	if error != OK:
 		photo_message = "CAMERA ERROR"
 		photo_message_t = 2.2
-		return
+		return false
 	var result := camera_ev.add_photo(house, lot_address(house), str(pins.get(house, "inspection")),
-			{"path": path, "time": stamp, "day": GameState.day, "quality": quality, "documented": info.documented, "key": key})
+			{"path": path, "time": str(pending.stamp), "day": GameState.day, "quality": int(pending.quality),
+			"documented": pending.documented, "key": str(pending.key)})
 	var recorded: Array = []
 	for id in result.newly:
 		recorded.append(_label_for(house, str(id)))
 	if not recorded.is_empty():
 		photo_message = "EVIDENCE RECORDED · %s" % ", ".join(recorded)
 	else:
-		photo_message = "PHOTO SAVED · %d%%" % quality
+		photo_message = "PHOTO SAVED · %d%%" % int(pending.quality)
 	photo_message_t = 2.6
-	camera_flash = 1.0
-	photo_taken.emit(house, quality, true, result.newly)
+	photo_taken.emit(house, int(pending.quality), true, result.newly)
 	evidence_changed.emit()
+	return true
+
+
+## Text for the photo preview: what the shot recorded, never why it matters.
+func recorded_labels(house: int, ids: Array) -> Array:
+	var labels: Array = []
+	for id in ids:
+		labels.append(_label_for(house, str(id)))
+	return labels
 
 
 func _label_for(house: int, id: String) -> String:

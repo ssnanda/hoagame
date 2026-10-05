@@ -26,6 +26,7 @@ func _ready() -> void:
 	add_child(_main)
 	for i in 8:
 		await get_tree().process_frame
+	_main._street.preview_enabled = false     # bots save photos immediately: no preview screen to tap
 	for term in TERMS:
 		GameState.clear_run()
 		_main._begin(false)
@@ -97,7 +98,7 @@ func _play_day() -> void:
 				house = int(h)
 				break
 		var lot = street.hood.lots[house]
-		street.player.position = lot.driveway_mid()
+		street.player.position = lot.inspect_anchor()
 		for i in 3:
 			await get_tree().process_frame
 		if street.near != house:
@@ -125,6 +126,7 @@ func _play_day() -> void:
 				if bool(options[choice].enabled):
 					pick = choice
 					break
+			_main._close_property_card()
 			_main._on_reinspection_choice(pick)
 		else:
 			if str(a.kind) == "lawn" and not _main._measurements.has(house):
@@ -159,6 +161,7 @@ func _play_day() -> void:
 						if bool(options[choice].enabled):
 							enabled.append(choice)
 					action = enabled[randi() % enabled.size()]
+			_main._close_property_card()
 			_main._on_case_ruled(action, cited if action != "dismiss" else [])
 		await get_tree().process_frame
 		await _drain_nonevening()

@@ -10,6 +10,9 @@ const CART_SPEED := 2.2
 const DEADZONE := 0.12
 const BODY_RADIUS := 14.0
 const ACCEL := 16.0
+const ASSIST_ALIGN := 0.8       ## cos of the widest heading error that still gets steering help
+const ASSIST_SPEED := 90.0      ## px/s of lateral nudge at best alignment
+const ASSIST_DEADBAND := 10.0   ## already near the centerline: leave the player alone
 
 var position := Vector2.ZERO
 var velocity := Vector2.ZERO
@@ -18,6 +21,7 @@ var angle := 0.0            ## smoothed heading
 var phase := 0.0            ## gait phase
 var moving := false
 var cart := false
+var assist_enabled := true   ## soft sidewalk steering (tests switch it off to measure its effect)
 var speed_mult := 1.0       ## <1 while slowed by an incident (soaked, chasing a dog)
 
 
@@ -39,6 +43,8 @@ func update(delta: float, move: Vector2, hood: Neighborhood, obstacles: Array, c
 		return
 	var previous := position
 	var candidate := previous + velocity * delta
+	if not cart and assist_enabled:
+		candidate += _sidewalk_assist(hood, previous, delta)
 	candidate = _stay_on_surface(hood, previous, candidate)
 	candidate = _sidestep(previous, candidate, circles, hood)
 	candidate = _keep_clear(previous, candidate, obstacles)
@@ -48,6 +54,23 @@ func update(delta: float, move: Vector2, hood: Neighborhood, obstacles: Array, c
 	phase += delta * 10.0 * speed_fraction()
 
 
+## Soft steering toward the sidewalk centerline while walking roughly parallel to it. It fades
+## out as the heading turns away, so deliberate direction changes always win. Never a rail.
+func _sidewalk_assist(hood: Neighborhood, at: Vector2, delta: float) -> Vector2:
+	var frame := hood.sidewalk_frame(at)
+	if frame.is_empty() or float(frame.dist) < -2.0:
+		return Vector2.ZERO
+	var heading := velocity.normalized()
+	var align := absf(heading.dot(frame.tangent))
+	if align < ASSIST_ALIGN:
+		return Vector2.ZERO
+	var pull := (frame.to_center as Vector2)
+	if pull.length() < ASSIST_DEADBAND:
+		return Vector2.ZERO
+	var strength := ASSIST_SPEED * clampf((align - ASSIST_ALIGN) / (1.0 - ASSIST_ALIGN), 0.0, 1.0) * speed_fraction()
+	return pull.normalized() * minf(pull.length(), strength * delta)
+
+
 func smooth_heading(delta: float) -> void:
 	angle = lerp_angle(angle, facing, 1.0 - exp(-12.0 * delta))
 
@@ -55,7 +78,7 @@ func smooth_heading(delta: float) -> void:
 func _walkable(hood: Neighborhood, p: Vector2) -> bool:
 	if cart:
 		# Carts stay on pavement; driveways are too tight, so park at the curb and walk in.
-		return hood.edge_distance(p) <= Neighborhood.WALK_W * 0.8 and not hood.is_water(p) \
+		return hood.edge_distance(p) <= Neighborhood.WALK_W and not hood.is_water(p) \
 				and p.x > 4.0 and p.x < Neighborhood.WORLD_W - 4.0 and p.y > 4.0 and p.y < Neighborhood.WORLD_H - 4.0
 	return hood.is_walkable(p)
 

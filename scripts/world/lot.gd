@@ -20,6 +20,7 @@ var curb := Vector2.ZERO             ## where the driveway meets the sidewalk
 var driveway_end := Vector2.ZERO     ## where the driveway meets the house
 var driveway_width := 40.0
 var mailbox := Vector2.ZERO
+var sidewalk_spot := Vector2.ZERO    ## centre of the public sidewalk beside the driveway (where sidewalk obstructions go)
 var address := ""
 var trees: Array[Vector3] = []       ## x, y, radius
 
@@ -31,6 +32,22 @@ func rotation() -> float:
 
 func right() -> Vector2:
 	return Vector2(-front.y, front.x)
+
+
+## Public inspection point: on the sidewalk in front of the driveway/mailbox. HOA inspections
+## are done from public frontage, so the player never has to stand inside landscaping.
+func inspect_anchor() -> Vector2:
+	return curb + front * 22.0
+
+
+## Which side (+1 / -1 across the frontage) front-yard decoration goes on: always the side AWAY from
+## the mailbox, so shrubs, beds and ornaments can never cover it.
+func decor_side() -> float:
+	var mail := (mailbox - center).dot(right())
+	if absf(mail) < 1.0:
+		var drive := (driveway_end - center).dot(right())
+		return -signf(drive) if drive != 0.0 else -1.0
+	return -signf(mail)
 
 
 func driveway_mid() -> Vector2:

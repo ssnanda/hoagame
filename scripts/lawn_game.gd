@@ -3,6 +3,7 @@ extends Panel
 ## The verdict happens on the case sheet; this is evidence gathering.
 
 signal measured(reading: float, precise: bool)
+signal closed
 
 const LIMIT_IN := 6.0
 const PPI := 30.0
@@ -129,6 +130,11 @@ func _ready() -> void:
 	var record_btn := _button("RECORD MEASUREMENT")
 	record_btn.pressed.connect(_record)
 	box.add_child(record_btn)
+	var back_btn := _button("< BACK")
+	back_btn.custom_minimum_size = Vector2(0, 64)
+	back_btn.add_theme_font_size_override("font_size", 24)
+	back_btn.pressed.connect(func(): closed.emit())
+	box.add_child(back_btn)
 
 
 func _on_reading(value: float) -> void:

@@ -14,6 +14,7 @@ func _make_main() -> Node:
 
 
 func _ready() -> void:
+	Settings.tutorial_done = true      # skip the one-time intro modal
 	var failures := 0
 	# 1. Round trip: play a little, save, reload in a fresh instance.
 	var a: Node = await _make_main()
@@ -22,7 +23,7 @@ func _ready() -> void:
 	for i in 4:
 		await get_tree().process_frame
 	var house: int = a.sim.assignments.keys()[0]
-	a._street.player.position = a._street.hood.lots[house].driveway_mid()
+	a._street.player.position = a._street.hood.lots[house].inspect_anchor()
 	a._save_progress()
 	var before: int = a.sim.assignments.size()
 	var day := GameState.day
@@ -42,7 +43,7 @@ func _ready() -> void:
 	b.queue_free()
 	await get_tree().process_frame
 	# 2. Old world versions load without errors.
-	for version in [3, 5, 6]:
+	for version in [3, 5, 6, 8]:
 		var old_world := {"world_version": version, "complaints": {2: {"kind": "card", "card": {"text": "Old complaint"}, "violations": [{"id": "rv", "label": "RV", "actual": true, "borderline": false, "severity": 2, "object": "rv"}]}},
 				"grass": [3.0, 3.0], "completed": [], "phase": "street", "evidence": {2: {"path": "x.png", "time": "t", "quality": 70, "documented": ["rv"], "shots": 1}},
 				"properties": {2: {"owner": "Old Owner", "relationship": "critic", "repeat_count": 1, "history": [], "compliance": 60}},

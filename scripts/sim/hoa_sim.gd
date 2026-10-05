@@ -283,7 +283,7 @@ func _arc_assignments(day: int) -> Dictionary:
 func pick_encounter(house: int, trigger: String, season: int) -> Dictionary:
 	var enc := encounters.pick({"trigger": trigger, "day": GameState.day, "season": season,
 			"property": property_of(house), "fairness_gap": board.fairness_gap(politics),
-			"favored": favored_name(house)}, rng)
+			"favored": favored_name(house), "cited": cases.get(house, {}).get("cited", [])}, rng)
 	if not enc.is_empty():
 		encounters.mark_played(str(enc.id), GameState.day)
 	return enc

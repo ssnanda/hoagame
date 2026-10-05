@@ -218,16 +218,7 @@ func _markers(lot: LotScript) -> void:
 	if near and active and not ctx.capturing:
 		_porch_resident(lot, time)
 	if active:
-		var pin := c + Vector2(0, -26.0 + sin(time * 3.0 + lot.id) * 4.0)
-		var col2 := Color("3fae6a") if kind == "lawn" else (Color("f2994a") if kind == "reinspect" else Color("e0533d"))
-		DrawUtil.ellipse(self, pin, 30.0 + sin(time * 4.0) * 3.0, 30.0 + sin(time * 4.0) * 3.0, Color(col2, 0.22))
-		DrawUtil.ellipse(self, pin + Vector2(4, 6), 18.0, 18.0, Color(0, 0, 0, 0.2))
-		DrawUtil.ellipse(self, pin, 18.0, 18.0, col2)
-		draw_string(ThemeDB.fallback_font, pin + Vector2(-18, 8), "!", HORIZONTAL_ALIGNMENT_CENTER, 36.0, 26, Color.WHITE)
-		if near:
-			var tag := Rect2(pin + Vector2(-60, -52), Vector2(120, 28))
-			DrawUtil.rr(self, tag, Color("e0533d"), 8)
-			draw_string(ThemeDB.fallback_font, tag.position + Vector2(0, 20), "REINSPECT" if kind == "reinspect" else "COMPLAINT", HORIZONTAL_ALIGNMENT_CENTER, tag.size.x, 16, Color.WHITE)
+		_assignment_marker(lot, kind, c, near, time)
 	elif kind == "done" or status != "":
 		var tint: Color = {"warning": Color("f2c94c"), "hearing": Color("f2994a"), "fined": Color("eb5757"),
 				"compliant": Color("6fcf97"), "disputed": Color("9b8cf0"), "reinspect": Color("f2c94c")}.get(status, Color("9aa4b2"))
@@ -255,11 +246,55 @@ func _porch_resident(lot: LotScript, time: float) -> void:
 	var glyph: String = ["…", "?", "!"][mood]
 	var bob := sin(time * 5.0) * 2.0
 	var bubble := door + Vector2(0, -34.0 + bob)
+	if t < 0.35:
+		return      # still stepping out: no bubble yet (a near-zero ellipse is a degenerate polygon)
 	DrawUtil.ellipse(self, bubble, 13.0 * t, 11.0 * t, Color(1, 1, 1, 0.92))
 	draw_string(ThemeDB.fallback_font, bubble + Vector2(-13, 8), glyph, HORIZONTAL_ALIGNMENT_CENTER, 26.0, 22, Color("1c1b1f"))
 	if mood == 0:
 		# Waving arm.
 		draw_line(door + Vector2(8, -2), door + Vector2(18, -14 + sin(time * 9.0) * 5.0), Color("f2c29b"), 3.0, true)
+
+
+## Neutral marker for an open assignment: a clipboard (complaint) or circular arrow
+## (reinspection) on a badge. The selected one is larger and pulses; the rest are quiet.
+## Nothing here depends on whether the complaint turns out to be valid.
+func _assignment_marker(lot: LotScript, kind: String, c: Vector2, near: bool, time: float) -> void:
+	var selected: bool = lot.id == int(ctx.objective)
+	var reinspect := kind == "reinspect"
+	var col := Color("71b9dc") if reinspect else Color("ffd36e")
+	var k := 1.0 if selected else 0.72
+	var pin := c + Vector2(0, -34.0 + (sin(time * 3.0 + lot.id) * 4.0 if selected else 0.0))
+	if selected:
+		var pulse := 0.5 + 0.5 * sin(time * 4.0)
+		draw_arc(pin, (26.0 + pulse * 7.0) * k, 0.0, TAU, 28, Color(col, 0.55), 3.0)
+		draw_arc(lot.mailbox - _cam + Vector2(0, -8), 15.0 + pulse * 3.0, 0.0, TAU, 20, Color(col, 0.6), 2.5)
+	DrawUtil.ellipse(self, pin + Vector2(3, 6), 20.0 * k, 20.0 * k, Color(0, 0, 0, 0.25))
+	draw_circle(pin, 20.0 * k, Color(0.07, 0.09, 0.13, 0.94))
+	draw_circle(pin, 20.0 * k, col, false, 3.0 * k)
+	if reinspect:
+		draw_arc(pin, 10.0 * k, 0.5, TAU - 0.4, 16, col, 3.0 * k)
+		var tip := pin + Vector2.from_angle(TAU - 0.4) * 10.0 * k
+		draw_colored_polygon(PackedVector2Array([tip + Vector2(-5, -6) * k, tip + Vector2(6, -2) * k, tip + Vector2(-3, 6) * k]), col)
+	else:
+		draw_rect(Rect2(pin + Vector2(-8, -9) * k, Vector2(16, 18) * k), col, false, 2.5 * k)
+		draw_rect(Rect2(pin + Vector2(-4, -12) * k, Vector2(8, 5) * k), col)
+		for row in 2:
+			draw_line(pin + Vector2(-4, -1 + row * 6) * k, pin + Vector2(4, -1 + row * 6) * k, col, 2.0 * k)
+	if selected or near:
+		var font := ThemeDB.fallback_font
+		var text := lot.address.to_upper()
+		var tsz := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15)
+		var tag := Rect2(pin + Vector2(-tsz.x * 0.5 - 10.0, -56.0), Vector2(tsz.x + 20.0, 26.0))
+		# Keep the tag on screen: shift it (in world units) so its screen rectangle stays inside the view.
+		var sc: Vector2 = _base.get_scale()
+		var left_screen: float = (_base * tag.position).x
+		var right_screen: float = (_base * (tag.position + Vector2(tag.size.x, 0.0))).x
+		if left_screen < 8.0:
+			tag.position.x += (8.0 - left_screen) / maxf(sc.x, 0.1)
+		elif right_screen > size.x - 8.0:
+			tag.position.x -= (right_screen - (size.x - 8.0)) / maxf(sc.x, 0.1)
+		DrawUtil.rr(self, tag, Color(0.07, 0.09, 0.13, 0.9), 8)
+		draw_string(font, tag.position + Vector2(10.0, 18.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
 
 
 # ---------------------------------------------------------------- actors
@@ -284,6 +319,14 @@ func _actors() -> void:
 			ActorPainter.place(self, _base, dog_p, 0.0, 1.0)
 			ActorPainter.dog(self, int(w.tone))
 			draw_set_transform_matrix(_base)
+	if not amb.gag.is_empty():
+		var gp: Vector2 = amb.gag_pos()
+		if _view.has_point(gp):
+			var heading: float = ((amb.gag.to as Vector2) - (amb.gag.from as Vector2)).angle()
+			ActorPainter.place(self, _base, gp - _cam, heading, 1.1)
+			ActorPainter.dog(self, 1)
+			draw_set_transform_matrix(_base)
+			draw_string(ThemeDB.fallback_font, gp - _cam + Vector2(-8, -26), "!", HORIZONTAL_ALIGNMENT_CENTER, 16.0, 22, Color("ffd36e"))
 	for g in amb.gardeners:
 		var p: Vector2 = amb.gardener_position(g)
 		if not _view.has_point(p):
@@ -387,15 +430,6 @@ func _player() -> void:
 	ActorPainter.place(self, _base, pos + Vector2(0, bob), angle, k)
 	ActorPainter.inspector(self, int(ctx.walker_variant), swing)
 	draw_set_transform_matrix(_base)
-	# Waypoint arrow toward the current objective while it is still far away.
-	var goal: int = ctx.objective
-	if goal >= 0 and not ctx.camera_ev.active:
-		var to_goal: Vector2 = (ctx.hood.lots[goal].driveway_mid() as Vector2) - (player.position as Vector2)
-		if to_goal.length() > 320.0:
-			var dir := to_goal.normalized()
-			var tip := pos + dir * 74.0
-			var side := Vector2(-dir.y, dir.x)
-			draw_colored_polygon(PackedVector2Array([tip + dir * 12.0, tip - dir * 6.0 + side * 9.0, tip - dir * 6.0 - side * 9.0]), Color("ffd36e", 0.9))
 	if float(ctx.bubble_t) > 0.0:
 		var font := ThemeDB.fallback_font
 		var text: String = ctx.bubble

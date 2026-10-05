@@ -27,7 +27,7 @@ func _ready() -> void:
 		house = int(h)
 		break
 	main._visited[house] = true
-	street.player.position = street.hood.lots[house].driveway_mid() + Vector2(0, 160)
+	street.player.position = street.hood.lots[house].inspect_anchor() + Vector2(0, 160)
 	for i in 6:
 		await get_tree().process_frame
 	# 1. Drag toward the property and release right beside it.
@@ -35,14 +35,17 @@ func _ready() -> void:
 	for k in 12:
 		_motion(Vector2(300, 700 - k * 18))
 		await get_tree().process_frame
-	street.player.position = street.hood.lots[house].driveway_mid()
-	for i in 4:
-		await get_tree().process_frame
+	street.player.position = street.hood.lots[house].inspect_anchor()
 	_mouse(false, Vector2(300, 484))
-	for i in 4:
+	for i in 10:
 		await get_tree().process_frame
 	_check(visits == 0, "drag release opened a property (visits=%d)" % visits)
-	_check(street.near == house, "player is not near the property after the drag (near=%d)" % street.near)
+	# Let the player settle exactly on the anchor (velocity from the drag has decayed by now).
+	street.player.position = street.hood.lots[house].inspect_anchor()
+	street.player.velocity = Vector2.ZERO
+	for i in 6:
+		await get_tree().process_frame
+	_check(street.near == house, "player is not near the property at its anchor (near=%d, expected %d)" % [street.near, house])
 	# 2. A quick tap on the prompt opens it.
 	var prompt: Rect2 = street.hud_view.prompt_rect
 	_check(prompt.has_area(), "no inspect prompt shown near an active case")
@@ -50,7 +53,9 @@ func _ready() -> void:
 	_mouse(true, at)
 	_mouse(false, at)
 	await get_tree().process_frame
-	_check(visits == 1, "tap on the prompt did not open the case (visits=%d)" % visits)
+	_check(visits == 1, "tap on the prompt did not open the property card (visits=%d)" % visits)
+	_check(main.ui_state == "PROPERTY_CONTEXT" or is_instance_valid(main._card_ui), "no card after tapping INSPECT")
+	main.close_topmost()
 	main._close_overlay()
 	for i in 4:
 		await get_tree().process_frame

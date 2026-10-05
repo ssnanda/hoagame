@@ -1,5 +1,82 @@
 [
   {
+    "id": "showcase_first",
+    "showcase": true,
+    "trigger": [
+      "warning",
+      "fine",
+      "hearing"
+    ],
+    "rarity": "common",
+    "cooldown_days": 9999,
+    "tone": "comic",
+    "pose": "pointing",
+    "props": [
+      "sprinkler",
+      "neighbor"
+    ],
+    "entrance": "door",
+    "lines": [
+      {
+        "who": "narration",
+        "text": "The front door swings open."
+      },
+      {
+        "who": "resident",
+        "text": "Seriously? You're writing me up over my GRASS?"
+      },
+      {
+        "who": "player",
+        "text": "A neighbor filed a complaint. It's documented."
+      },
+      {
+        "who": "resident",
+        "text": "THEN MEASURE STEVE'S! His lawn is a jungle!"
+      },
+      {
+        "who": "narration",
+        "text": "Every sprinkler in the yard turns on at once. The inspector is, regrettably, in range."
+      },
+      {
+        "who": "resident",
+        "text": "...That's a new timer."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Explain the complaint",
+        "reply": "I'm documenting it, not judging it. You'll have time to fix it.",
+        "result": "They grumble, but they heard you.",
+        "outcome": {
+          "relationship": 1,
+          "legal": -1,
+          "slow": 10
+        }
+      },
+      {
+        "label": "Give them a few days",
+        "reply": "Take until the end of the week.",
+        "result": "A neighbor nods approvingly from a window.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 1,
+          "slow": 10
+        }
+      },
+      {
+        "label": "Stay firm",
+        "reply": "The deadline is on the notice.",
+        "result": "Firm, fair, and soaked.",
+        "outcome": {
+          "relationship": -3,
+          "power": 1,
+          "slow": 10
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
     "id": "calm_explain",
     "trigger": [
       "warning",
@@ -299,7 +376,8 @@
         }
       }
     ],
-    "footer": "A CLIP IS CIRCULATING IN THE NEIGHBORHOOD CHAT."
+    "footer": "A CLIP IS CIRCULATING IN THE NEIGHBORHOOD CHAT.",
+    "entrance": "side"
   },
   {
     "id": "dog_clipboard",
@@ -359,7 +437,8 @@
           "power": -1
         }
       }
-    ]
+    ],
+    "entrance": "garage"
   },
   {
     "id": "sprinkler_surprise",
@@ -478,7 +557,8 @@
           "power": 1
         }
       }
-    ]
+    ],
+    "entrance": "garage"
   },
   {
     "id": "neighbor_joins",
@@ -538,7 +618,8 @@
         }
       }
     ],
-    "footer": "A DIRECTOR HAS BEEN CALLED."
+    "footer": "A DIRECTOR HAS BEEN CALLED.",
+    "entrance": "side"
   },
   {
     "id": "board_friend",
@@ -754,7 +835,8 @@
           "relationship": -1
         }
       }
-    ]
+    ],
+    "entrance": "side"
   },
   {
     "id": "passive_card",
@@ -867,7 +949,8 @@
           "power": 1
         }
       }
-    ]
+    ],
+    "entrance": "side"
   },
   {
     "id": "forgot_notice",
@@ -922,7 +1005,8 @@
           "power": 1
         }
       }
-    ]
+    ],
+    "entrance": "garage"
   },
   {
     "id": "golf_cart_boxed",
@@ -1442,7 +1526,8 @@
           "happiness": 2
         }
       }
-    ]
+    ],
+    "entrance": "side"
   },
   {
     "id": "police_misunderstanding",
@@ -1691,6 +1776,210 @@
         "outcome": {
           "relationship": -6,
           "legal": -1
+        }
+      }
+    ]
+  },
+  {
+    "id": "sidewalk_trimmed",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 5,
+    "tone": "angry",
+    "pose": "pointing",
+    "props": [],
+    "when": {
+      "cited_any": [
+        "sidewalk_obstruction"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I trimmed that hedge last month! Look at it!"
+      },
+      {
+        "who": "player",
+        "text": "It's still across the sidewalk. Here's the photo."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} squints at the photo. The hedge squints back."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Offer to recheck Friday",
+        "reply": "Trim it by Friday and I'll note it as cured.",
+        "result": "A deal. They get the shears.",
+        "outcome": {
+          "relationship": 4,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Show them the photo",
+        "reply": "The sidewalk is only half as wide as it should be.",
+        "result": "They concede with a groan.",
+        "outcome": {
+          "relationship": -1,
+          "power": 1
+        }
+      },
+      {
+        "label": "Stand firm",
+        "reply": "The notice stands.",
+        "result": "The shears come out. Angrily.",
+        "outcome": {
+          "relationship": -4
+        }
+      }
+    ]
+  },
+  {
+    "id": "photo_what_doing",
+    "trigger": [
+      "photo"
+    ],
+    "rarity": "common",
+    "cooldown_days": 2,
+    "tone": "tense",
+    "pose": "arms_crossed",
+    "props": [],
+    "entrance": "door",
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Excuse me? What exactly are you doing out there?"
+      },
+      {
+        "who": "narration",
+        "text": "{owner} has noticed the camera. Of course they have."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Explain: a complaint was filed",
+        "reply": "I'm documenting a reported issue. Nothing personal.",
+        "result": "They watch from the porch, arms crossed.",
+        "outcome": {
+          "relationship": 1
+        }
+      },
+      {
+        "label": "Keep photographing",
+        "reply": "(Photographs the lawn. Politely.)",
+        "result": "The porch light flicks on. At noon.",
+        "outcome": {
+          "relationship": -2
+        }
+      },
+      {
+        "label": "Wave hello",
+        "reply": "Lovely day! Just doing the rounds.",
+        "result": "The wave is returned. Suspiciously.",
+        "outcome": {
+          "relationship": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "photo_poses",
+    "trigger": [
+      "photo"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 4,
+    "tone": "comic",
+    "pose": "celebrating",
+    "props": [],
+    "entrance": "side",
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Oh, are we taking pictures? Let me get my good side!"
+      },
+      {
+        "who": "narration",
+        "text": "{owner} strikes a pose directly in front of the evidence."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Politely step aside",
+        "reply": "If you could just... move a little to the left.",
+        "result": "They move a little to the right. Progress.",
+        "outcome": {
+          "relationship": 3,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Take the portrait too",
+        "reply": "One for the album.",
+        "result": "A glamour shot is added to the case file.",
+        "outcome": {
+          "relationship": 5,
+          "happiness": 2,
+          "slow": 8
+        }
+      }
+    ]
+  },
+  {
+    "id": "photo_filming_back",
+    "trigger": [
+      "photo"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 5,
+    "tone": "tense",
+    "pose": "filming",
+    "props": [
+      "phone"
+    ],
+    "entrance": "door",
+    "when": {
+      "traits_any": [
+        "litigious",
+        "anti_hoa",
+        "gossip",
+        "paranoid",
+        "confrontational"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "You photograph me, I photograph you. Say cheese."
+      },
+      {
+        "who": "narration",
+        "text": "{owner}'s phone is already up. So is the inspector's."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Smile and continue",
+        "reply": "Very professional of us both.",
+        "result": "Two cameras, one standoff, zero drama.",
+        "outcome": {
+          "relationship": 0,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Ask them to stop",
+        "reply": "Could you not record me, please?",
+        "result": "They record you asking.",
+        "outcome": {
+          "relationship": -3,
+          "legal": 2
         }
       }
     ]

@@ -116,7 +116,13 @@ func handle_tap(pos: Vector2) -> bool:
 	if camera.active:
 		var buttons := _zoom_buttons()
 		if (buttons.cancel as Rect2).has_point(pos):
-			camera.active = false
+			ctx.cancel_camera()
+		elif (buttons.album as Rect2).has_point(pos):
+			gallery_open = true
+			gallery_page = 0
+			gallery_sel = -1
+		elif pos.distance_to(camera_shutter()) <= 62.0:
+			ctx.take_photo()
 		elif (buttons.minus as Rect2).has_point(pos):
 			camera.zoom = clampf(camera.zoom - 0.3, EvidenceCamera.ZOOM_MIN, EvidenceCamera.ZOOM_MAX)
 		elif (buttons.plus as Rect2).has_point(pos):
@@ -151,7 +157,7 @@ func handle_tap(pos: Vector2) -> bool:
 
 
 func zoom_reset_rect() -> Rect2:
-	return Rect2(14.0, 92.0, 112.0, 48.0)
+	return Rect2(14.0, 116.0, 124.0, 56.0)
 
 
 func handle_drag(delta: Vector2) -> void:
@@ -163,7 +169,15 @@ func _map_scale() -> float:
 	return _map_view().size.x / Neighborhood.WORLD_W
 
 
+func _map_close_rect() -> Rect2:
+	var panel := _map_panel()
+	return Rect2(panel.end.x - 152.0, panel.end.y - 66.0, 132.0, 50.0)
+
+
 func _tap_map(pos: Vector2) -> void:
+	if _map_close_rect().has_point(pos):
+		map_open = false
+		return
 	var view := _map_view()
 	if view.has_point(pos):
 		var scale := _map_scale()
@@ -178,7 +192,7 @@ func _tap_map(pos: Vector2) -> void:
 					best = d
 					found = lot.id
 		if found >= 0:
-			ctx.set_objective(found)
+			ctx.select_objective(found)
 	map_open = false
 
 
@@ -230,18 +244,23 @@ func _draw_ui() -> void:
 	var clock_size := font.get_string_size(clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 20)
 	DrawUtil.rr(self, Rect2(14.0, 14.0, clock_size.x + 24.0, 34.0), Color(0, 0, 0, 0.5), 10)
 	draw_string(font, Vector2(26.0, 38.0), clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("ffd36e"))
-	# Next destination.
+	# Next destination: neutral wording, address first. Tap to hop to the next open assignment.
 	next_rect = Rect2()
 	var objective: int = ctx.objective
 	if objective >= 0 and ctx.pins.get(objective, "") in ACTIVE_KINDS:
 		var lot: LotScript = ctx.hood.lots[objective]
-		var feet := roundi(player.position.distance_to(lot.driveway_mid()) * FEET_PER_PX)
-		var text := "Next: %s · %d ft" % [lot.address, feet]
-		var ts := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
-		var box := Rect2(14.0, 54.0, minf(ts.x + 24.0, w - MINI_SIZE.x - 44.0), 30.0)
+		var feet := roundi(player.position.distance_to(lot.inspect_anchor()) * FEET_PER_PX)
+		var kind_text := "REINSPECTION" if ctx.pins.get(objective, "") == "reinspect" else "COMPLAINT"
+		var line1 := lot.address.to_upper()
+		var line2 := "NEXT · %s · %d ft" % [kind_text, feet]
+		var ts := font.get_string_size(line1, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
+		var box := Rect2(14.0, 54.0, minf(maxf(ts.x, 190.0) + 56.0, w - MINI_SIZE.x - 40.0), 52.0)
 		next_rect = box.grow(6.0)
-		DrawUtil.rr(self, box, Color(0, 0, 0, 0.5), 10)
-		draw_string(font, box.position + Vector2(12.0, 21.0), text, HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 20.0, 18, Color.WHITE)
+		DrawUtil.rr(self, box, Color(0, 0, 0, 0.55), 12)
+		_draw_badge(box.position + Vector2(24.0, 26.0), kind_text == "REINSPECTION", 16.0, true)
+		draw_string(font, box.position + Vector2(46.0, 22.0), line1, HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 54.0, 20, Color.WHITE)
+		draw_string(font, box.position + Vector2(46.0, 42.0), line2, HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 54.0, 14, Color("ffd36e"))
+		_draw_edge_arrow(lot, feet)
 	if absf(float(ctx.user_zoom) - 1.0) > 0.05 and not ctx.camera_ev.active:
 		var zr := zoom_reset_rect()
 		DrawUtil.rr(self, zr, Color(0, 0, 0, 0.5), 10)
@@ -289,8 +308,8 @@ func _draw_ui() -> void:
 		var status := "NO ACTIVE CASE"
 		var label := ""
 		if active:
-			status = "REINSPECTION REQUIRED" if kind == "reinspect" else "COMPLAINT PENDING"
-			label = "REINSPECT" if kind == "reinspect" else "INSPECT PROPERTY"
+			status = "REINSPECTION" if kind == "reinspect" else "COMPLAINT"
+			label = "REINSPECT" if kind == "reinspect" else "INSPECT"
 		elif spotted:
 			status = "SOMETHING CATCHES YOUR EYE"
 			label = "OPEN CASE"
@@ -314,14 +333,65 @@ func _draw_ui() -> void:
 		draw_string(font, photo_box.position + Vector2(12.0, 32.0), pm, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.WHITE)
 
 
+## Neutral assignment badge: clipboard (complaint) or circular arrow (reinspection). Shape,
+## not just colour, tells them apart. It never says whether the complaint is valid.
+func _draw_badge(at: Vector2, reinspect: bool, r: float, selected: bool) -> void:
+	var col := Color("71b9dc") if reinspect else Color("ffd36e")
+	draw_circle(at, r, Color(0.08, 0.1, 0.14, 0.9))
+	draw_circle(at, r, col, false, 2.0)
+	if reinspect:
+		draw_arc(at, r * 0.5, 0.5, TAU - 0.4, 16, col, 2.5)
+		var tip := at + Vector2.from_angle(TAU - 0.4) * r * 0.5
+		draw_colored_polygon(PackedVector2Array([tip + Vector2(-4, -5), tip + Vector2(5, -2), tip + Vector2(-2, 5)]), col)
+	else:
+		draw_rect(Rect2(at + Vector2(-r * 0.4, -r * 0.42), Vector2(r * 0.8, r * 0.86)), col, false, 2.0)
+		draw_rect(Rect2(at + Vector2(-r * 0.18, -r * 0.55), Vector2(r * 0.36, r * 0.2)), col)
+		for k in 2:
+			draw_line(at + Vector2(-r * 0.2, -r * 0.05 + k * r * 0.28), at + Vector2(r * 0.2, -r * 0.05 + k * r * 0.28), col, 1.5)
+
+
+## Screen-edge pointer to the selected assignment while it is off screen.
+func _draw_edge_arrow(lot: LotScript, feet: int) -> void:
+	var target: Vector2 = ctx.to_screen(lot.center)
+	var view := Rect2(Vector2.ZERO, size)
+	if view.grow(-40.0).has_point(target):
+		return
+	var inset := Rect2(46.0, 150.0, size.x - 92.0, size.y - 330.0)     # keeps clear of the HUD, minimap and buttons
+	var center := inset.get_center()
+	if target.distance_to(center) < 1.0:
+		return
+	var dir := (target - center).normalized()
+	var tx := INF if absf(dir.x) < 0.001 else (inset.size.x * 0.5) / absf(dir.x)
+	var ty := INF if absf(dir.y) < 0.001 else (inset.size.y * 0.5) / absf(dir.y)
+	var best := minf(tx, ty)
+	var at := center + dir * best
+	var side := Vector2(-dir.y, dir.x)
+	var col := Color("ffd36e")
+	draw_colored_polygon(PackedVector2Array([at + dir * 24.0, at - dir * 8.0 + side * 18.0, at - dir * 8.0 - side * 18.0]), Color(0, 0, 0, 0.55))
+	draw_colored_polygon(PackedVector2Array([at + dir * 20.0, at - dir * 6.0 + side * 14.0, at - dir * 6.0 - side * 14.0]), col)
+	var font := ThemeDB.fallback_font
+	var label := "%s · %d ft" % [lot.address, feet]
+	var tsz := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
+	var lp := at - dir * 34.0 - Vector2(tsz.x * 0.5, 0.0)
+	lp.x = clampf(lp.x, 10.0, size.x - tsz.x - 10.0)
+	DrawUtil.rr(self, Rect2(lp + Vector2(-8, -17), Vector2(tsz.x + 16.0, 26.0)), Color(0, 0, 0, 0.6), 8)
+	draw_string(font, lp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+
+
 # ---------------------------------------------------------------- camera
+
+## Big central shutter shown while framing a shot.
+func camera_shutter() -> Vector2:
+	return Vector2(size.x * 0.5, size.y - 96.0)
+
 
 func _zoom_buttons() -> Dictionary:
 	var frame: Rect2 = ctx.camera_ev.frame_rect(size)
 	return {
-		"minus": Rect2(frame.position.x, frame.end.y + 14.0, 76.0, 60.0),
-		"plus": Rect2(frame.position.x + 88.0, frame.end.y + 14.0, 76.0, 60.0),
-		"cancel": Rect2(frame.end.x - 76.0, frame.position.y - 70.0, 76.0, 54.0),
+		"minus": Rect2(frame.position.x, frame.end.y + 14.0, 84.0, 64.0),
+		"plus": Rect2(frame.position.x + 96.0, frame.end.y + 14.0, 84.0, 64.0),
+		"cancel": Rect2(frame.end.x - 140.0, frame.position.y - 70.0, 140.0, 64.0),
+		"album": Rect2(frame.position.x, frame.position.y - 70.0, 140.0, 64.0),
 	}
 
 
@@ -336,7 +406,10 @@ func _draw_camera_frame() -> void:
 		draw_line(corner, corner + Vector2(sx * 48.0, 0), bracket, 5.0, true)
 		draw_line(corner, corner + Vector2(0, sy * 48.0), bracket, 5.0, true)
 	var title: String = ctx.hood.lots[ctx.near].address if int(ctx.near) >= 0 else "EVIDENCE"
-	draw_string(font, Vector2(0, frame.position.y - 28.0), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color.WHITE)
+	var head_h := frame.position.y - 70.0
+	DrawUtil.rr(self, Rect2(0.0, 0.0, size.x, head_h - 12.0), Color(0, 0, 0, 0.45), 0)
+	draw_string(font, Vector2(0, head_h - 58.0), title.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, size.x, 28, Color.WHITE)
+	draw_string(font, Vector2(0, head_h - 32.0), "EVIDENCE CAMERA", HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color("ffd36e"))
 	var info: Dictionary = ctx.frame_info
 	var quality: int = info.get("quality", 0)
 	var meter_col := Color("e0533d") if quality < EvidenceCamera.USABLE_QUALITY else (Color("f2b632") if quality < 70 else Color("7ee081"))
@@ -352,13 +425,22 @@ func _draw_camera_frame() -> void:
 		DrawUtil.rr(self, tag_box, Color(0.12, 0.45, 0.2, 0.85), 10)
 		draw_string(font, tag_box.position + Vector2(14.0, 24.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
 	var buttons := _zoom_buttons()
-	for btn_name in ["minus", "plus", "cancel"]:
+	for btn_name in ["minus", "plus", "cancel", "album"]:
 		var r: Rect2 = buttons[btn_name]
-		DrawUtil.rr(self, r, Color(0.04, 0.08, 0.12, 0.85), 12)
-		var label := "−" if btn_name == "minus" else ("+" if btn_name == "plus" else "CANCEL")
+		DrawUtil.rr(self, r, Color(0.04, 0.08, 0.12, 0.88), 12)
+		var label := "−" if btn_name == "minus" else ("+" if btn_name == "plus" else ("CANCEL" if btn_name == "cancel" else "ALBUM"))
 		draw_string(font, r.position + Vector2(0, r.size.y * 0.66), label, HORIZONTAL_ALIGNMENT_CENTER, r.size.x,
-				34 if btn_name != "cancel" else 18, Color.WHITE)
-	draw_string(font, Vector2(frame.position.x, frame.end.y + 100.0), "ZOOM %.1fx · stand close, center the lot" % ctx.camera_ev.zoom,
+				34 if btn_name in ["minus", "plus"] else 20, Color.WHITE)
+	# Large central shutter.
+	var sc := camera_shutter()
+	var count: int = ctx.camera_ev.evidence.get(int(ctx.near), {}).get("photos", []).size() if int(ctx.near) >= 0 else 0
+	draw_circle(sc + Vector2(0, 4), 58.0, Color(0, 0, 0, 0.3))
+	draw_circle(sc, 56.0, Color.WHITE)
+	draw_circle(sc, 46.0, Color("e0533d") if quality >= EvidenceCamera.USABLE_QUALITY else Color("8a8f98"))
+	draw_circle(sc, 38.0, Color(1, 1, 1, 0.18))
+	if count > 0:
+		draw_string(font, sc + Vector2(80, 8), "%d PHOTO%s" % [count, "" if count == 1 else "S"], HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
+	draw_string(font, Vector2(frame.position.x, frame.end.y + 100.0), "ZOOM %.1fx · frame the reported issue" % ctx.camera_ev.zoom,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.8))
 
 
@@ -417,7 +499,11 @@ func _draw_minimap() -> void:
 	var objective: int = ctx.objective
 	if objective >= 0 and ctx.pins.get(objective, "") in ACTIVE_KINDS:
 		var op: Vector2 = to_map.call(ctx.hood.lots[objective].center)
-		_mini.draw_arc(op, 5.0 + 3.0 * (0.5 + 0.5 * sin(float(ctx.time) * 4.0)), 0.0, TAU, 16, Color("ffd36e"), 1.5)
+		var sel_col := Color("71b9dc") if ctx.pins.get(objective, "") == "reinspect" else Color("ffd36e")
+		_mini.draw_circle(op, 6.0, Color(0.05, 0.08, 0.12, 0.85))
+		_mini.draw_circle(op, 4.0, sel_col)
+		_mini.draw_arc(op, 8.0 + 3.0 * (0.5 + 0.5 * sin(float(ctx.time) * 4.0)), 0.0, TAU, 16, sel_col, 1.5)
+		_mini.draw_arc(op, 11.0, 0.0, TAU, 20, Color(1, 1, 1, 0.5), 1.0)
 	var me: Vector2 = to_map.call(player)
 	_mini.draw_circle(me, 4.0, Color.WHITE)
 	_mini.draw_circle(me, 7.0, Color(1, 1, 1, 0.35), false, 1.5)
@@ -447,7 +533,10 @@ func _draw_map_chrome() -> void:
 	draw_string(font, panel.position + Vector2(24.0, 45.0), "NEIGHBORHOOD", HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 48.0, 26, Color("1d3340"))
 	draw_string(font, panel.position + Vector2(24.0, 72.0), "Drag to scroll · tap a case to set it as your destination",
 			HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 48.0, 16, Color("435a62"))
-	draw_string(font, panel.position + Vector2(24.0, panel.size.y - 30.0), "Tap empty map to close", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("435a62"))
+	draw_string(font, panel.position + Vector2(24.0, panel.size.y - 30.0), "Tap a case to set it as your destination", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("435a62"))
+	var close := _map_close_rect()
+	DrawUtil.rr(self, close, Color("1d3340"), 12)
+	draw_string(font, close.position + Vector2(0, 33.0), "CLOSE", HORIZONTAL_ALIGNMENT_CENTER, close.size.x, 22, Color.WHITE)
 
 
 func _draw_full_map() -> void:

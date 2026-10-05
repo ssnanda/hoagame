@@ -1,3 +1,335 @@
+HOA PRESIDENT - HANDOFF SUMMARY (CORE GAMEPLAY / NAVIGATION / ACCESSIBILITY / CINEMATIC POLISH PASS)
+==================================================================================================
+This file reflects the FINAL state of the working tree at the end of this pass. The summary of the
+earlier "breadth" pass is preserved verbatim in the APPENDIX at the bottom.
+
+
+FINISHING ROUND (LATER IN THE SAME PASS) - READ THIS FIRST
+----------------------------------------------------------
+After the first version of this summary the owner asked for the remaining checklist items. They were implemented and tested; sections 22/23/24
+below were updated accordingly. Additions in this round:
+- Arrival zoom assist (street.gd): if zoomed out below 1.1 when you reach the selected property, the camera eases to 1.15x; leaving restores the old
+  zoom unless the player changed it. Disabled by Reduce Motion.
+- Resident entrances: encounter field `entrance` = door | garage | side. Garage door rolls up and the resident steps out of the bay; "side" walks in from
+  the right edge. 8 scenes use garage/side; the showcase uses the front door.
+- Photo-time reactions: new encounter trigger "photo" (14% chance, once per house per day, after USE PHOTO, never before the showcase has played):
+  photo_what_doing, photo_poses, photo_filming_back (37 scenes total).
+- Street-name signs are now readable blades with the street's real name (static_painter, "label" on furniture entries).
+- Decor validation: Neighborhood._decor_warnings checks fixed yard decor (shrubs, beds, ornament, flowers, dead patch) against the public walk, mailbox and
+  inspection anchor. It found 34 real mailbox overlaps; fixed by Lot.decor_side() (decor always on the side away from the mailbox), DECOR_DEPTH, seasonal
+  piles clamped and skipped near access points. 0 warnings on the shipped seed and 40 seeds.
+- Evidence line of sight: parked/visitor/crew vehicles near the house now count as obstructors in photo quality (street._obstructors).
+- Marker address tags are clamped to the screen; edge-arrow inset raised to 150 px.
+- Scripted early cases: day 1 case 1 = clear tall grass, case 2 = plainly FALSE complaint (curb bins that are not there); day 2 = one BORDERLINE tall-grass
+  report (main._force_second_case / _force_borderline_case, flag politics.scripted_day2).
+- Touch targets raised (primary actions 96 px tall; card/preview/camera/back buttons 64 px; HUD STATS/MENU 58 px; check rows and sliders 56 px). New
+  tools/qa_touch.tscn audits the real UI: 47 controls, 0 under the minimum (primary >= 80, others >= 56 design px; the 720-px design width is ~390 pt on an
+  iPhone, so 56 px is about 30 pt, below Apple's 44 pt guideline for secondary buttons - flagged as a risk).
+- Interruption handling: focus-out / pause now also saves during a cinematic (safe: ruling already applied, showcase already flagged). New
+  tools/qa_interrupt.tscn covers card, camera, preview and cinematic interruptions plus relaunch/resume (showcase does not replay).
+- Colour-vision check: markers are shape-coded (clipboard vs circular arrow) with a dark disc and light outline; amber/blue relative luminance 0.69 vs 0.43.
+  Simulated protanopia/deuteranopia/tritanopia screenshots were reviewed; the clipboard marker stays clear (the reinspection marker was not in frame in
+  that capture, so it was judged from the luminance numbers and its different shape).
+- Sound: "good" on USE PHOTO. Test-harness fixes: qa_interrupt/qa_cinematic no longer advance a freed panel; qa tools run with --disable-vsync to avoid
+  macOS off-screen throttling stalls.
+FINAL TEST RESULTS AFTER THE FINISHING ROUND (all on the final tree):
+  validate_world: 0 warnings, self-test catches a tree on an anchor, 0 unreachable, 0 slot issues, 0 vehicle access conflicts over 28 days, 40-seed sweep 0.
+  qa_encounters 37 scenes 0 problems; qa_walk 0 problems (assist 19.2 vs 25.7 px, 0 stuck); qa_input 0; qa_flow 0; qa_touch 0 small of 47;
+  qa_interrupt 0; qa_cinematic 0; resume_test 0 failures (v3/5/6/8); smoke bots smart 12 days 116 cases / random 9 days 69 / fine_all 8 days 68, all 0 errors.
+
+1. SESSION DATE AND REPOSITORY / BRANCH
+---------------------------------------
+Date: 2026-10-05. Repo: /Users/sandip/Projects/hoagame (github.com/ssnanda/hoagame). Branch: main.
+HEAD at the start of this pass: d21a634 "AltStore manifest 0.1.33+34" (the owner had committed/released the previous
+pass as 0.1.32/0.1.33). App version is 0.1.33 build 34 and was NOT changed. WORLD_VERSION (save schema constant in
+scripts/main.gd) was bumped 8 -> 9 (see section 18).
+
+2. GIT / WORKTREE STATUS
+------------------------
+ALL CHANGES FROM THIS PASS ARE UNCOMMITTED in the working tree (25 modified files, 7 new files, ~1950 lines changed).
+Nothing was committed, pushed, merged or released. No version bump. No bundle-ID/signing change. No release build.
+The owner commits after verifying.
+
+3. GOAL OF THIS PASS
+--------------------
+"Does the game actually feel good to play?" Fix the three owner-reported problems: (1) tapping a complaint drops you in
+a case screen with no obvious way to take a photo or get back to the street; (2) sidewalks too narrow and obstructed;
+(3) houses blocked by cars/trees and the cinematic comedy not discoverable. No new large systems.
+
+4. PROBLEMS / ROOT CAUSES FOUND
+-------------------------------
+a) Complaint flow: INSPECT opened the full case sheet directly (or the lawn-measure mini game for tall grass); the
+   camera was only reachable from a small HUD button; a photo was saved and attached instantly with no preview or
+   retake; the case sheet, reinspection panel and lawn game had no Back button (only dismiss/ruling) so the player could
+   not return to walking without making a ruling. Escape did nothing.
+b) REAL BUG (pre-existing): street.inspect_near() only emitted `visit` for kinds "lawn"/"card". For a "reinspect"
+   property the HUD REINSPECT button showed a random flavor quip, so follow-up inspections were not reachable by real
+   touch play. Automated bots hid this because they called main._on_visit() directly. Fixed (kinds in ACTIVE_KINDS).
+c) Sidewalks: WALK_W was 30 px and the walkable corridor was only 0.8*WALK_W with no verge or lawn tolerance; street
+   trees were centred 12 px outside the walk so canopies (r 20-30) covered it visually.
+d) Interaction distance was measured to the driveway middle (inside the lot), not a public point. Neighbour-bulb crew
+   trucks and some curb cars could poke onto/over neighbouring sidewalks and mailboxes (89 overlaps over 28 days found by the
+   new validator).
+e) Cinematic system existed but: encounters were suppressed on day 1 (MIN_DAY=2), the push-in was subtle, props and
+   vehicles were clipped by the bottom bar, and floats/toasts overlapped it.
+f) Degenerate polygon: porch-resident speech bubble used an ellipse whose radius scaled from 0 (engine error
+   "Invalid polygon data, triangulation failed", intermittently). Fixed.
+g) Newly added HUD header text wrapped one-letter-per-line; "BEST" label wrapped; title lacked COMMUNITIES (earlier pass
+   edit never applied). All fixed in the visual QA round of the previous pass (kept here for completeness).
+
+5. EXACTLY WHAT WAS CHANGED (summary)
+-------------------------------------
+- New explicit, DERIVED UI state machine in main.gd (_compute_ui_state) plus new compact PropertyCard and PhotoPreview panels.
+- Camera flow split into capture -> preview -> commit in street.gd; big central shutter, address header, CANCEL, ALBUM.
+- Navigation: neutral clipboard / circular-arrow world markers, selected marker larger with pulse + address tag, Next chip
+  (two lines, tap to cycle nearest-first), screen-edge arrow with address + distance, minimap selected marker,
+  arrival feedback (haptic + soft chime + "PROPERTY REACHED"), map CLOSE button and select_objective().
+- Sidewalks widened 30 -> 46 px (+53%); forgiving walkable corridor; soft sidewalk steering; front-lawn cutting.
+- Public inspection anchor (Lot.inspect_anchor) replaces the driveway middle for proximity/objective/distance.
+- Street trees moved outward and made smaller; tree/car/crew placement keeps anchors, mailboxes and sidewalks clear.
+- New violation "sidewalk_obstruction" with 5 visual variants and photo framing that targets the obstruction.
+- Cinematic: scripted showcase encounter on the first real ruling, day-1 gating removed, door-opens/resident-walks-out
+  animation, 0.7 s camera push to 2.3x, HUD fade, stacked floats, sprinklers hit the inspector, ruling toast shown after.
+- First game: scripted easy tall-grass onboarding case near the start.
+- Reinspection uses the same card (primary INSPECT, optional TAKE PHOTO) and Back returns to the card.
+- Escape closes the topmost layer (desktop dev aid); every panel has a visible Back.
+- New QA tools (flow, cinematic, walk) and validator extensions.
+
+6. MAJOR UX DECISIONS
+---------------------
+- Progressive disclosure: World -> compact card (one gold primary action) -> camera -> preview -> card with evidence
+  ("REVIEW & DECIDE") -> case sheet. The case sheet is no longer the first thing the player sees.
+- Primary action rules: no photo -> TAKE PHOTO; photo attached -> REVIEW & DECIDE; reinspection -> INSPECT.
+- Case sheet highlights ONE recommended action (WARNING if something is cited, else DISMISS) in gold; others stay available.
+- A bad/unusable photo no longer costs score points (a retry, not a punishment).
+- Lawn measuring is optional (MEASURE LAWN on the card), not a forced first step; photo evidence suffices.
+- Markers say "COMPLAINT"/"REINSPECTION" only; they never encode whether the complaint is valid.
+- Comedy remains rare after the first showcase; ruling toast ("Warning issued") now appears after the cinematic.
+
+7. COMPLAINT -> INSPECTION -> CAMERA -> CASE WORKFLOW (AFTER THE CHANGES)
+------------------------------------------------------------------------
+1. Select/see assignment (Next chip, marker, arrow). 2. Walk to the sidewalk anchor; haptic + chime + "PROPERTY REACHED".
+3. HUD button "INSPECT" (or tap the house) -> street emits `visit` -> main._on_visit -> (once per house per day a random
+   "visit" encounter may play, 20%) -> PropertyCard (state PROPERTY_CONTEXT). Card: < BACK, tag, address, complaint text,
+   gold TAKE PHOTO, VIEW COMPLAINT (expands source/reliability/owner; state COMPLAINT_VIEW), OPEN CASE, MEASURE LAWN (tall grass).
+4. TAKE PHOTO -> camera immediately (state CAMERA): address header, EVIDENCE CAMERA, ALBUM, CANCEL, +/- zoom, quality meter,
+   big shutter. CANCEL returns to the card. 5. Shutter -> PHOTO_PREVIEW (photo, address, date, quality word, "Recorded: ..."):
+   USE PHOTO | RETAKE | TAKE ANOTHER | CANCEL. Nothing is saved until USE/TAKE ANOTHER. 6. USE PHOTO -> card shows
+   "Evidence attached - N photos - best Q%" with gold REVIEW & DECIDE. 7. Case sheet (CASE_DECISION) has < BACK -> card.
+8. WARNING/DISMISS/HEARING/FINE -> ruling applied -> optional/scripted cinematic -> notification -> back to WORLD.
+Reinspection: card primary INSPECT -> reinspection panel (< BACK returns to card) -> choice -> WORLD.
+
+8. NAVIGATION / COMPLAINT-MARKER BEHAVIOR
+-----------------------------------------
+- Selected assignment: large badge (clipboard = complaint amber, circular arrow = reinspection blue), pulsing ring, mailbox ring, address tag.
+  Others: smaller quiet badges. Shape differs, not just colour. Markers depend only on pins (kind), never on violation truth.
+- HUD Next chip: badge + ADDRESS + "NEXT - COMPLAINT|REINSPECTION - N ft"; tap cycles open assignments nearest first
+  (street.cycle_objective) and plays a tap sound; map taps use street.select_objective.
+- Edge arrow (hud_view._draw_edge_arrow): shown only when the selected lot is off screen; inset to avoid HUD/minimap/buttons;
+  label "address - N ft".
+- Minimap: selected marker is a filled disc with pulsing ring in the kind colour; reinspections blue. Roads still come only from Neighborhood.
+- Arrival: street._process detects near == objective once per approach -> Settings.haptic(18), Sfx "notify", message, signal `arrived`.
+- Full map has a CLOSE button and the text "Tap a case to set it as your destination".
+
+9. SIDEWALK / WALKABILITY CHANGES
+---------------------------------
+- Neighborhood.WALK_W 30 -> 46 (visual +53%); all geometry derives from it (121 lots now, previously 125; lot ids/positions changed).
+- is_walkable(): road+sidewalk+VERGE(30 px of grass beyond the walk) but not inside house footprints; driveways; and the open
+  FRONT LAWN (between the house front line + 10 px and the sidewalk, within the house width + 6 px). Side/back yards, houses stay off limits.
+- PlayerController._sidewalk_assist: while walking within ~37 degrees of parallel to a sidewalk, a soft nudge (<= 90 px/s, scaled by
+  alignment and speed, dead band 10 px) toward the sidewalk centre; vanishes when heading turns away; never for the cart; `assist_enabled` toggle for tests.
+- Cart still pavement-only (edge_distance <= WALK_W).
+- Hood.sidewalk_frame(p) provides tangent + vector to the centreline.
+
+10. PROPERTY-ACCESSIBILITY AND OBSTRUCTION RULES
+------------------------------------------------
+- Lot.inspect_anchor() = curb + front*22 (on the public sidewalk). Proximity, objective distance, arrow distance and reachability all use it.
+- Trees: street trees are smaller (r 18-26) and centred outward so the canopy edge starts outside the walk; _tree_site_clear keeps
+  canopies off driveway apron (62+r), mailbox (34+r) and anchor (40+r).
+- Cars: crew trucks only on straight lots and only if they keep every nearby anchor/mailbox clear (_crew_lot/_keeps_access_clear).
+  Visitor "mover" cars and curb cars sit in the road lane. Driveway cars sit inside the driveway (anchor is on the sidewalk).
+- Neighborhood.validate() now also reports: anchor not walkable, mailbox unreachable, tree covering anchor/mailbox/curb, tree
+  blocking a sidewalk centreline (sampled every 24 px), house facing away from its street (earlier). unreachable_lots() uses the anchor.
+- validate_world.gd also: self-test that the validator catches a tree dropped on an anchor, vehicle-vs-anchor/mailbox overlap
+  over 28 simulated days, and sidewalk-obstruction placement on the walk.
+
+11. NEW SIDEWALK-OBSTRUCTION VIOLATION
+--------------------------------------
+data/violations.json id "sidewalk_obstruction" (Maintenance, severity 1, cure 3 days, fine 40-120, all seasons) with `objects`
+variants [hedge, hedge, branch, bins, debris, materials]; allegation picks one (Violations._pick_object). LotSlots spot "sidewalk" =
+lot.sidewalk_spot (computed per lot by Neighborhood._snap_sidewalk_spot on the sidewalk centreline beside the driveway), scaled 1.6x for
+readability, small collision box. ObjectPainter._sidewalk_obstruction draws each variant. EvidenceCamera.evaluate frames the obstruction
+itself (not the house) and documents in-frame non-house entries even without house coverage. Responsibility = the adjacent property.
+Encounter "sidewalk_trimmed" ("I trimmed that last month!") uses new `when.cited_any`. Player can detour via the verge/road (walkable).
+Appears through the normal random complaint pool (not forced).
+
+12. CINEMATIC ENCOUNTER CHANGES
+-------------------------------
+- Removed MIN_DAY (day-1 gating). Added Encounters.SHOWCASE_ID "showcase_first" (data/encounters.json, flag `showcase`): excluded from
+  random picks; played on the FIRST warning/fine/hearing ruling of a save; random scenes wait until it has played. Total 34 scenes.
+- Door opens, resident walks out (0.45-1.35 s, grows 1.5x->2.4x), scene reworked (scene area 70% of height, road strip for vehicles, 2.4x figure).
+- main._play_encounter: HUD (street HUD + header row + stats + task label) fades out over 0.35 s while the camera pushes to 2.3x over 0.7 s,
+  Sfx door + mood; reverse fade on return. Camera restores via the existing easing. Input locked (ui_locked + cine_house).
+- Sprinklers now fire from the lawn strip at the inspector (wet tint + drips).
+- Notification "Warning issued" shows after the encounter; small floats stack instead of overlapping.
+
+13. HOW THE GUARANTEED EARLY CINEMATIC WORKS
+--------------------------------------------
+main._force_first_case() (day 1, Settings.tutorial_done false): picks the standard straight lot whose anchor is nearest the spawn point and
+overwrites its assignment with a certain, non-borderline tall-grass complaint from "Wozig management inspection"; street.clear_lot_parking()
+removes parked cars on it and set_objective() selects it. Trees are kept off its access route by generation/validation. The player's first
+WARNING (or fine/hearing) makes sim.pick_encounter return showcase_first (Encounters.pick short-circuits until last_seen has the id; last_seen is
+saved in world.encounter_seen). Showcase script: door swings open; "Seriously? You're writing me up over my GRASS?"; player line; "THEN MEASURE STEVE'S!";
+sprinklers soak the inspector; "...That's a new timer."; choices Explain / Give a few days / Stay firm; footer queues a board discussion.
+Existing mid-game saves also get the showcase once (last_seen lacks the id).
+
+14. FILES CREATED
+-----------------
+scripts/ui/property_card.gd, scripts/ui/photo_preview.gd, tools/qa_flow.gd/.tscn, tools/qa_cinematic.gd/.tscn, tools/qa_walk.gd, tools/qa_touch.gd/.tscn, tools/qa_interrupt.gd/.tscn
+(plus the uid files Godot generates). (CHAT_HANDOFF_SUMMARY.txt rewritten.)
+
+15. FILES MODIFIED
+------------------
+data/encounters.json, data/violations.json, README.md, scripts/main.gd, scripts/street.gd, scripts/case_file.gd, scripts/lawn_game.gd,
+scripts/sim/{encounters,hoa_sim,violations}.gd, scripts/ui/{encounter_panel,reinspect_panel}.gd,
+scripts/world/{ambient,evidence_camera,hud_view,lot,lot_slots,neighborhood,object_painter,player_controller,world_view}.gd,
+tools/{qa_input,resume_test,shots,smoke_test,validate_world}.gd.
+
+16. IMPORTANT CLASSES / FUNCTIONS ADDED OR SUBSTANTIALLY CHANGED
+----------------------------------------------------------------
+main.gd: _compute_ui_state, close_topmost (Escape), _on_visit, _open_property_card/_close_property_card/_on_card_action/_back_to_card,
+_show_reinspect_panel, _on_camera_exit, _on_photo_captured/_on_preview_choice, _force_first_case, _play_encounter (fade/push), _notify, _update_hint (state based).
+street.gd: ui_locked, preview_enabled, camera_from_card, open_camera(from_card), cancel_camera, take_photo (capture only when preview on), commit_photo,
+recorded_labels, select_objective/cycle_objective, arrival detection, clear_lot_parking, spawn_point, _tap/_gui_input lock guards, nearest-lot via inspect_anchor + street filter.
+neighborhood.gd: is_walkable, _front_lawn_at, _in_house_zone, sidewalk_frame, _snap_sidewalk_spot, spatial _lot_buckets/_index_lots, validate additions, _sidewalk_warnings, _trees_near.
+player_controller.gd: _sidewalk_assist, assist_enabled. hud_view.gd: _draw_badge, _draw_edge_arrow, camera_shutter, map CLOSE. world_view.gd: _assignment_marker, _porch_resident.
+sim: encounters.gd (showcase, cited_any), hoa_sim.gd (cited in encounter ctx), violations.gd (_pick_object). ambient.gd: _crew_lot/_keeps_access_clear, gag dog, obstacle `src` tags.
+ui: PropertyCard (signal action(name): photo/inspect/case/measure/back/details_*), PhotoPreview (signal choice: use/retake/another/cancel).
+
+17. DATA FILES / SCHEMA CHANGES
+-------------------------------
+encounters.json: new optional fields `showcase` (bool), `entrance`, `when.cited_any[]`. New entries: showcase_first, sidewalk_trimmed (34 total).
+violations.json: new entry sidewalk_obstruction with optional `objects[]` (variant list; falls back to `object`).
+No other schema changes.
+
+18. SAVE COMPATIBILITY
+----------------------
+WORLD_VERSION 8 -> 9. Reason: widening the sidewalks changed lot generation (125 -> 121 lots, new ids/positions), so lot-specific state in older saves
+no longer maps to the same houses. resume path: world_version < 9 keeps the term (day, score, stats, deck, board/politics) but rebuilds residents/cases
+(same mechanism previously used for v<6). New fields are optional (encounter_seen already existed). Evidence photos from old saves are not shown for old lot ids.
+Tested via tools/resume_test.tscn (versions 3, 5, 6, 8 load; round trip ok). Not tested with a real device save.
+
+19. QA / TESTING PERFORMED
+--------------------------
+Automated (headless): validate_world (single + 40-seed sweep), qa_encounters, encounter_test, qa_walk, resume_test, smoke bots (smart/random/fine_all, 1 term).
+Automated (off-screen window with a real renderer, scripted UI): qa_input (x3 clean after fixes), qa_flow, qa_cinematic.
+Visual (off-screen screenshots read by the assistant): street, cul-de-sac, corner, weather, seasons, all 34 encounter scenes (earlier pass), menus, maps,
+property card flow, camera, preview, case sheet, edge arrow, sidewalk obstruction variants + camera framing, first-game cinematic sequence, tall-aspect (450x975).
+
+20. EXACT TEST RESULTS (final tree)
+-----------------------------------
+validate_world: WORLD VALIDATION 0 warnings; SELF-TEST validator catches a tree on an anchor; REACHABILITY 0 unreachable; SLOTS 0 outside; ACCESS 0 vehicles over anchors/mailboxes (28 days); SEED SWEEP 0 of 40 with warnings.
+qa_encounters: 34 scenes, 0 problems. encounter_test: 34 defined, 0 problems (432 plays / 400 days).
+qa_walk: assist error 19.2 px vs 25.7 px without, stuck runs 0, 0 problems (front-lawn walkable, house/back yard not, anchors reachable).
+qa_input: 0 problems (3 consecutive final runs; earlier flaky runs were test-script drift, fixed). qa_flow: 0 problems. qa_cinematic: 0 problems.
+resume_test: round trip ok, versions 3/5/6/8 ok, 0 failures. smoke: smart 16 days 162 cases 0 errors; random ended day 10 (voted out) 64 cases 0 errors; fine_all ended day 5 24 cases 0 errors.
+NOTE: earlier ad-hoc runs hit "ConfigFile parse error" only because three bots shared one sandbox HOME concurrently (test artefact, not the project).
+
+21. VISUAL QA PERFORMED (off-screen, assistant-reviewed)
+--------------------------------------------------------
+Reviewed screenshots listed above. Things judged OK: card layout, camera screen, preview, case sheet highlight, wide sidewalks, obstruction visibility,
+showcase sequence (push-in, door open, resident walks out, sprinklers, choices, return). Not human-verified at real device scale or with real touch.
+
+22. KNOWN ISSUES / LIMITATIONS
+------------------------------
+- NOT manually played by a human on macOS and NOT tested on a real iPhone. All "play" was scripted via the real UI nodes/signals.
+- Assignment world-marker address tag can clip at screen edges (drawn in world space).
+- Sidewalk assist is deliberately small (~25% error reduction in the QA model); tune on device.
+- Edge arrow top inset (120 px) is close to the Next chip when the target is straight up.
+- The macOS window shows an extra top gap (display safe area) that iOS handles differently.
+- Existing saves lose lot-specific state (see 18). Mid-game saves also see the showcase scene once.
+- Random complaint generation can still put a mix of hard cases first on day 2+; only the very first case is scripted.
+- Audio is unreviewed (cannot listen). No distinct sound for "photo accepted" beyond existing cues.
+- A parked/visitor car could still stand near (not on) an anchor; only exact coverage is validated.
+
+23. NOT COMPLETED FROM THIS PROMPT
+----------------------------------
+Everything in the 122-item list has been implemented except the following, which are limited or unverified:
+- Real iPhone / human play: nothing was tested by a human or on a device (see the specific-questions block). Mobile-feel acceptance (section 114: comfort of touch
+  targets, readability, camera comfort) is only audited programmatically and by screenshots.
+- Touch targets: secondary buttons are ~30-35 pt on a phone (64 design px); Apple's guideline is 44 pt. Primary actions are ~52 pt.
+- Evidence line of sight stays lightweight (vehicles/trees count as obstructors; no ray casting) by design (item 64).
+- Audio (new cues, music moods) has never been listened to.
+- The marker colour-vision check did not include a frame with the reinspection marker.
+- Side-yard entrances are a simple walk-in from the right edge (not a lot-specific gate).
+- No dedicated test yet for multi-touch pinch on real hardware; pinch is covered with synthetic ScreenTouch/ScreenDrag events only.
+
+24. RECOMMENDED NEXT STEPS (PRIORITIZED)
+----------------------------------------
+1) Owner plays on a real iPhone (checklist 26) and reports feel of sidewalk assist, card size, camera. 2) Tune assist/NEAR_DIST/ZOOM from that feedback.
+3) Decide on larger secondary touch targets after device testing. 4) Listen through the audio cues. 5) Re-run all QA tools after any UI change. 6) Consider a reinspection-marker colour-vision capture.
+
+25. COMMANDS FOR THE RELEVANT TESTS
+-----------------------------------
+godot = /Applications/Godot.app/Contents/MacOS/Godot
+godot --headless --path . --script res://tools/validate_world.gd            (add: -- seeds=40)
+godot --headless --path . res://tools/qa_encounters.tscn
+godot --headless --path . --script res://tools/qa_walk.gd
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_input.tscn
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_flow.tscn
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_touch.tscn
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_interrupt.tscn     (add --disable-vsync if an off-screen run stalls)
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_cinematic.tscn -- out=<dir>   (saves c01..c15 PNGs)
+HOME=<scratch> godot --path . --position 6000,6000 --resolution 540x960 res://tools/shots.tscn -- out=<dir> shots=card,walk,flow,life,menus,maps
+HOME=<scratch> godot --headless --path . res://tools/smoke_test.tscn -- bot=smart seed=5      (use a copy of the project and a separate HOME per concurrent run)
+HOME=<scratch> godot --headless --path . res://tools/resume_test.tscn
+The off-screen window (--position 6000,6000) renders normally and does not appear on screen; --minimized froze rendering/animation (do not use).
+
+26. EXACT MANUAL iPHONE VERIFICATION CHECKLIST (NOT YET DONE)
+-------------------------------------------------------------
+A. Fresh install/new game: intro -> brief -> first complaint is tall grass close to start; gold arrow/Next chip point to it.
+B. Walk: confirm the sidewalk feels wide, you can cut across a front lawn, houses/back yards block, trees do not block routes, cart still road-only.
+C. Arrive: haptic + chime + "PROPERTY REACHED"; tap INSPECT -> compact card with gold TAKE PHOTO; < BACK closes it and you can walk.
+D. TAKE PHOTO -> camera (address, big shutter, CANCEL, ALBUM); CANCEL returns to the card; shutter -> preview; RETAKE, TAKE ANOTHER, CANCEL, USE PHOTO all behave.
+E. After USE PHOTO: card says Evidence attached; REVIEW & DECIDE -> case sheet with gold WARNING; < BACK returns to card; WARNING triggers the showcase
+   (push-in, HUD fades, door opens, resident walks out, sprinklers, choices), then smooth return to walking with HUD back.
+F. Pinch zoom then release: nothing opens. Drag release next to a house: nothing opens. Touch the world behind the card/camera: nothing happens.
+G. Reinspection: complete a warning, wait for the cure period, walk back: marker is a blue circular arrow, INSPECT opens the card (this used to do nothing), INSPECT -> panel -> choices; < BACK works.
+H. Sidewalk obstruction complaint (appears randomly): photograph it (house need not be centred), warn, optional "I trimmed that last month!" scene.
+I. Check minimap selected marker, full map (CLOSE button, tap a case to set destination), edge arrow when the target is off screen.
+J. Background the app mid-play and return; kill and relaunch; confirm Continue works (old saves drop lot-specific state once).
+
+27. CONVENTIONS THE NEXT SESSION MUST PRESERVE
+----------------------------------------------
+- Owner rules: no commit/push/merge unless authorized; no version bump; no release builds; no unrequested system changes; never delete files (use Finder trash).
+- Complaints are allegations: never reveal validity in labels/colours/markers before investigation.
+- UI state is DERIVED (main._compute_ui_state). Add new panels by making them detectable there and by setting street.ui_locked via that function; always give them Back.
+- Public inspection happens at Lot.inspect_anchor(); decorations must not cover anchor/mailbox/sidewalk (validate_world enforces).
+- New content stays data-driven (encounters/violations JSON). Showcase encounter id is special.
+- Keep geometry single-source (Neighborhood); minimap/map read it.
+- Run qa_flow/qa_cinematic/qa_input/validate_world after any change to the card/camera/encounter/world code.
+
+ANSWERS TO THE SPECIFIC QUESTIONS IN THE PROMPT
+-----------------------------------------------
+- Behaved differently than expected: reinspections were unreachable by real tap (bug b); `--minimized` froze rendering; porch bubble caused intermittent polygon errors; qa_input was flaky due to test drift.
+- Compromises: first case scripted only for the first game; assist kept soft; lawn measurement made optional; lot ids changed (save migration drops lot state).
+- Intentionally deferred: see section 23.
+- Risky code areas needing review: main.gd UI flow (card/preview/overlay interplay and _hearing_active/_encounter_active flags), street.take_photo/commit split,
+  Neighborhood.is_walkable (front-lawn rule) + sidewalk_frame, PlayerController._sidewalk_assist, save migration (WORLD_VERSION 9).
+- Can the player still get into a confusing/stuck state? qa_flow tries card/camera/preview/case/menu/album/Escape sequences and ends in WORLD with input restored; no
+  stuck state was found in scripted tests, but a human has not tried to break it. Possible residual risk: overlay panels opened by morning-queue steps while a card is open (cards are closed in _new_day).
+- Is every generated inspectable property validated as reachable? Yes for the shipped seed and a 40-seed sweep: anchor walkable, flood-fill reachable from the spawn, no tree on anchor/mailbox/curb, no vehicle over
+  anchor/mailbox in 28 simulated days. Not validated: arbitrary future obstruction placement by new violations (sidewalk obstruction can be bypassed via verge/road).
+- Do markers ever reveal validity? No: markers read only the pin kind (lawn/card/reinspect) and selection; the scripted first case is valid but its marker is identical to others. The photo preview "Recorded: ..." text
+  names what a photo shows (pre-existing behaviour) but not before a photo is taken. Camera shows "Potential evidence detected" (pre-existing, doesn't name it).
+- Was the first-game cinematic verified through an actual play flow? YES via tools/qa_cinematic.tscn: fresh profile, intro modal, brief, scripted case, real INSPECT/TAKE PHOTO/USE PHOTO/REVIEW & DECIDE/WARNING button presses, real
+  take_photo, then the encounter played and returned. The "walking" step teleports the player to the anchor (movement itself is covered by qa_walk). Not played by a human.
+- Testing classes: automated PASSED = validate_world, qa_encounters, qa_walk, resume_test, smoke bots (headless/sandbox). Off-screen visual/scripted-UI PASSED = qa_input, qa_flow, qa_cinematic and screenshot review. Manually played on macOS = NOT DONE. Real iPhone = NOT DONE.
+
+
+=====================================================================================================
+APPENDIX - SUMMARY OF THE EARLIER (BREADTH) PASS, PRESERVED
+=====================================================================================================
 HOA PRESIDENT - PROJECT HANDOFF SUMMARY
 =======================================
 Session date: 2026-10-05. Repo: /Users/sandip/Projects/hoagame (GitHub ssnanda/hoagame). Branch main.

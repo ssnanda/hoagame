@@ -17,12 +17,14 @@ const HearingPanel := preload("res://scripts/ui/hearing_panel.gd")
 const VotePanel := preload("res://scripts/ui/vote_panel.gd")
 const Career := preload("res://scripts/sim/career.gd")
 const Weather := preload("res://scripts/sim/weather.gd")
+const PropertyCard := preload("res://scripts/ui/property_card.gd")
+const PhotoPreview := preload("res://scripts/ui/photo_preview.gd")
 const EncounterPanel := preload("res://scripts/ui/encounter_panel.gd")
 
 const CARD_SIZE := Vector2(600, 640)
 const UPDATE_MANIFEST_URL := "https://raw.githubusercontent.com/ssnanda/hoagame/main/altstore.json"
 const ALTSTORE_BUNDLE_ID := "com.ssnanda.hoagame"
-const WORLD_VERSION := 8          ## 8: encounters, ARC memory, vendors, community mods (all optional on load)
+const WORLD_VERSION := 9          ## 8: encounters, ARC memory, vendors, community mods. 9: wider sidewalks changed lot ids/positions (older runs keep the term but drop lot-specific state)
 const STAT_LABELS := {"budget": "TREASURY", "happiness": "COMMUNITY", "power": "AUTHORITY"}
 const DOLLARS_PER_POINT := 690
 
@@ -50,8 +52,17 @@ var _stats_button: Button
 var _details: VBoxContainer
 var _is_over := false
 var _encounter_active := false
+var _info_row: HBoxContainer
+var _small_floats := 0
+var _hearing_active := false
+var _first_case := -1             ## onboarding property chosen for the first game (-1 otherwise)
+var _card_ui: Control            ## compact property card (PROPERTY_CONTEXT / COMPLAINT_VIEW)
+var _preview_ui: Control         ## photo preview (PHOTO_PREVIEW)
+var _pending_shot: Dictionary = {}
+var ui_state := "WORLD"          ## derived every frame from what is actually on screen (see _compute_ui_state)
 var _built_community := "oak_meadow"     ## community whose layout this scene was built with
 var _debug_clock := 0.0
+var _photo_scene_done: Dictionary = {}   ## houses that already had their one "photo" scene today
 var _visited: Dictionary = {}     ## houses already approached today (one "visit" scene per house)
 var _active := -1
 var _grass: Array = []
@@ -88,6 +99,8 @@ func _ready() -> void:
 # ---------------------------------------------------------------- title and menus
 
 func _show_title() -> void:
+	_close_property_card()
+	_close_preview()
 	_close_overlay()
 	if is_instance_valid(_title):
 		_title.queue_free()
@@ -303,8 +316,8 @@ func _open_altstore_update() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_CLOSE_REQUEST:
 		# Calls, control center and swipe-away all lose focus first: save on the way out.
-		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty() and not _encounter_active:
-			_save_progress()
+		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty():
+			_save_progress()      # safe mid-cinematic: the ruling is already applied and the scene is flagged as seen
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		_altstore_launch_pending = false
 		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty():
@@ -312,6 +325,9 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE and close_topmost():
+		get_viewport().set_input_as_handled()
+		return
 	if _card == null or _is_over:
 		return
 	if event.is_action_pressed("ui_left"):
@@ -362,9 +378,16 @@ func _load_events() -> void:
 
 
 func _new_day() -> void:
+	_close_property_card()
+	_close_preview()
+	_street.camera_ev.active = false
 	var info := sim.start_day(GameState.day, GameState.season(), GameState.weekday())
 	if _is_over:
 		return
+	_first_case = _force_first_case() if (GameState.day == 1 and not Settings.tutorial_done) else -1
+	if GameState.day == 2 and not bool(sim.politics.get("scripted_day2", false)):
+		sim.politics.scripted_day2 = true
+		_force_borderline_case()
 	var season := GameState.season()
 	var growth: float = [1.0, 1.15, 0.9, 0.7][season] * sim.landscaper_growth()
 	_grass = []
@@ -384,9 +407,13 @@ func _new_day() -> void:
 	for house in sim.discoverable:
 		visuals[int(house)] = sim.discoverable[house]
 	_visited.clear()
+	_photo_scene_done.clear()
 	_phase = "street"
 	_evening_bonus = {}
 	_street.set_day(pins, _grass, 0, null, {}, visuals)
+	if _first_case >= 0:
+		_street.clear_lot_parking(_first_case)
+		_street.set_objective(_first_case)
 	_street.set_discoverable(sim.discoverable.keys())
 	_street.set_case_states(sim.case_states())
 	_update_task()
@@ -404,6 +431,73 @@ func _new_day() -> void:
 	_morning_queue.append(_maybe_board_call)
 	_morning_queue.append(_maybe_event)
 	_next_morning_step()
+
+
+## Onboarding: the very first complaint is deliberately easy. A plain tall-grass report on a
+## standard lot near the starting point, no parked car, trees kept off the access route
+## (Neighborhood.validate guarantees that), and a certain, unambiguous violation. It is also
+## the ruling that triggers the scripted showcase encounter.
+func _force_first_case() -> int:
+	var hood = _street.hood
+	var spawn: Vector2 = _street.spawn_point()
+	var best := -1
+	var best_d := INF
+	for lot in hood.lots:
+		if lot.kind != "standard" or lot.side == 0:
+			continue
+		var d: float = spawn.distance_to(lot.inspect_anchor())
+		if d < best_d:
+			best_d = d
+			best = lot.id
+	if best < 0:
+		return -1
+	var def: Dictionary = sim.violations.get_def("tall_grass")
+	var item: Dictionary = sim.violations.make_allegation(def, 1.0, sim.rng, 1)
+	item.borderline = false
+	sim.assignments[best] = {"kind": "lawn", "source": "management", "complainant": "Wozig management inspection",
+			"violations": [item], "false_complaint": false, "status": "assigned",
+			"text": "The front lawn is well over the 6 inch grass limit."}
+	_force_second_case(best)
+	return best
+
+
+## Case 2 of the first game: a plainly FALSE complaint (curb bins that are not there), so the player
+## learns that a complaint is an allegation. Nearest standard lot to the start after the first case.
+func _force_second_case(not_lot: int) -> void:
+	var lot_id := _nearest_standard_lot(not_lot)
+	if lot_id < 0:
+		return
+	var def: Dictionary = sim.violations.get_def("curb_bins")
+	var item: Dictionary = sim.violations.make_allegation(def, 0.0, sim.rng, 0)
+	item.borderline = false
+	sim.assignments[lot_id] = {"kind": "card", "source": "resident", "complainant": "Neighbor", "violations": [item],
+			"false_complaint": true, "status": "assigned", "text": "Trash bins have been left at the curb all week."}
+
+
+## Day 2 of the first game: a borderline tall-grass report (just over the limit) to introduce judgment.
+func _force_borderline_case() -> void:
+	var lot_id := _nearest_standard_lot(-1)
+	if lot_id < 0 or sim.assignments.has(lot_id) and str(sim.assignments[lot_id].kind) == "reinspect":
+		return
+	var def: Dictionary = sim.violations.get_def("tall_grass")
+	var item: Dictionary = sim.violations.make_allegation(def, 1.0, sim.rng, 1)
+	item.borderline = true
+	sim.assignments[lot_id] = {"kind": "lawn", "source": "resident", "complainant": "Neighbor", "violations": [item],
+			"false_complaint": false, "status": "assigned", "text": "The grass looks long. It might be right at the limit."}
+
+
+func _nearest_standard_lot(skip: int) -> int:
+	var spawn: Vector2 = _street.spawn_point()
+	var best := -1
+	var best_d := INF
+	for lot in _street.hood.lots:
+		if lot.kind != "standard" or lot.side == 0 or lot.id == skip or sim.cases.has(lot.id):
+			continue
+		var d: float = spawn.distance_to(lot.inspect_anchor())
+		if d < best_d:
+			best_d = d
+			best = lot.id
+	return best
 
 
 ## Short morning summary: what is waiting, the forecast and the next big date.
@@ -443,8 +537,8 @@ func _resume_run() -> void:
 		_start()
 		return
 	sim.load_world(world)
-	if int(world.get("world_version", 1)) < 6:
-		# Neighborhood rebuilt in world version 6: keep the term, drop lot-specific state.
+	if int(world.get("world_version", 1)) < 9:
+		# Neighborhood rebuilt (v6, and again in v9 with wider sidewalks): keep the term, drop lot-specific state.
 		sim.properties = sim.residents.create(_street.house_count())
 		sim.cases = {}
 		_new_day()
@@ -527,9 +621,10 @@ func _save_progress(show_feedback := false) -> void:
 # ---------------------------------------------------------------- inspecting
 
 func _on_visit(house: int) -> void:
-	if _is_over or not sim.assignments.has(house) or _overlay.visible or house in sim.completed or _encounter_active:
+	if _is_over or not sim.assignments.has(house) or _overlay.visible or house in sim.completed or _encounter_active \
+			or is_instance_valid(_card_ui) or is_instance_valid(_preview_ui):
 		return
-	# The resident may come out to meet you before the case sheet opens.
+	# The resident may come out to meet you before anything opens.
 	if not _visited.has(house):
 		_visited[house] = true
 		await _play_encounter(house, "visit")
@@ -538,34 +633,149 @@ func _on_visit(house: int) -> void:
 	_active = house
 	Sfx.play("tap")
 	Settings.haptic(15)
+	_open_property_card(house)
+
+
+# ---------------------------------------------------------------- property card flow
+# World -> compact card (INSPECT) -> camera -> photo preview -> card with evidence ->
+# case sheet. Every step has a Back that returns to the step before it.
+
+func _open_property_card(house: int) -> void:
+	_close_property_card()
+	var a: Dictionary = sim.assignments[house]
+	var evidence := _evidence_for(house)
+	var photos := (evidence.get("photos", []) as Array).size()
+	var source := str(a.get("source", "resident"))
+	_card_ui = PropertyCard.new()
+	_card_ui.size = size
+	(_card_ui as PropertyCard).setup({
+		"address": _street.lot_address(house), "kind": "reinspect" if str(a.kind) == "reinspect" else "complaint",
+		"text": str(a.get("text", "A complaint was filed.")), "photos": photos, "quality": int(evidence.get("quality", 0)),
+		"source": str(a.get("complainant", sim.violations.source_label(source))),
+		"reliability": "Source reliability: %s" % _reliability_word(sim.violations.source_reliability(source)),
+		"owner": sim.owner_of(house), "relationship": sim.relationship_text(house),
+		"can_measure": str(a.kind) == "lawn" and not _measurements.has(house),
+		"bottom_margin": float(_margin.get_theme_constant("margin_bottom")),
+	})
+	_card_ui.action.connect(_on_card_action)
+	add_child(_card_ui)
+	_street.ui_locked = true
+
+
+func _close_property_card() -> void:
+	if is_instance_valid(_card_ui):
+		_card_ui.queue_free()
+	_card_ui = null
+
+
+func _on_card_action(name: String) -> void:
+	var house := _active
+	match name:
+		"back":
+			_close_property_card()
+			_street.ui_locked = false
+		"photo":
+			_close_property_card()
+			_street.ui_locked = false
+			_street.open_camera(true)
+		"inspect":
+			_close_property_card()
+			_show_reinspect_panel(house)
+		"case":
+			_close_property_card()
+			_overlay.show()
+			_open_case_sheet(house)
+		"measure":
+			_close_property_card()
+			_overlay.show()
+			var game = LAWN_SCRIPT.new()
+			game.setup(_grass[house], sim.owner_of(house))
+			game.measured.connect(_on_lawn_measured)
+			game.closed.connect(_back_to_card)
+			_overlay.add_child(game)
+			game.position = ((size - Vector2(620, 880)) / 2.0).max(Vector2(20, 20))
+
+
+## Leaves whatever full-screen panel is open and returns to the property card.
+func _back_to_card() -> void:
+	_close_overlay()
+	if _active >= 0 and sim.assignments.has(_active) and not _active in sim.completed:
+		_open_property_card(_active)
+
+
+func _show_reinspect_panel(house: int) -> void:
 	var a: Dictionary = sim.assignments[house]
 	_overlay.show()
-	if str(a.kind) == "reinspect":
-		var record: Dictionary = sim.cases.get(house, {})
-		var panel: Panel = ReinspectPanel.new()
-		var labels: Array = []
-		for v in record.get("violations", []):
-			if str(v.id) in record.get("cited", []):
-				labels.append(str(v.label))
-		panel.setup({"address": _street.lot_address(house), "owner": sim.owner_of(house), "relationship": sim.relationship_text(house),
-				"result": str(a.get("result", "unchanged")), "labels": labels, "options": sim.reinspection_options(house)})
-		panel.chose.connect(_on_reinspection_choice)
-		_overlay.add_child(panel)
-	elif str(a.kind) == "lawn" and not _measurements.has(house):
-		var game = LAWN_SCRIPT.new()
-		game.setup(_grass[house], sim.owner_of(house))
-		game.measured.connect(_on_lawn_measured)
-		_overlay.add_child(game)
-		game.position = ((size - Vector2(620, 880)) / 2.0).max(Vector2(20, 20))
-	else:
-		_open_case_sheet(house)
+	var record: Dictionary = sim.cases.get(house, {})
+	var panel: Panel = ReinspectPanel.new()
+	var labels: Array = []
+	for v in record.get("violations", []):
+		if str(v.id) in record.get("cited", []):
+			labels.append(str(v.label))
+	panel.setup({"address": _street.lot_address(house), "owner": sim.owner_of(house), "relationship": sim.relationship_text(house),
+			"result": str(a.get("result", "unchanged")), "labels": labels, "options": sim.reinspection_options(house)})
+	panel.chose.connect(_on_reinspection_choice)
+	panel.closed.connect(_back_to_card)
+	_overlay.add_child(panel)
 
 
 func _on_lawn_measured(reading: float, precise: bool) -> void:
 	_measurements[_active] = {"reading": reading, "precise": precise}
 	_close_overlay()
-	_overlay.show()
-	_open_case_sheet(_active)
+	_open_property_card(_active)
+
+
+# ---------------------------------------------------------------- camera flow
+
+func _on_camera_exit(reason: String) -> void:
+	# Left the viewfinder without a photo: return to the card we came from.
+	if reason == "cancel" and _street.camera_from_card and _active >= 0 and sim.assignments.has(_active):
+		_open_property_card(_active)
+
+
+func _on_photo_captured(pending: Dictionary) -> void:
+	_pending_shot = pending
+	_close_preview()
+	var house: int = pending.house
+	_preview_ui = PhotoPreview.new()
+	_preview_ui.size = size
+	(_preview_ui as PhotoPreview).setup(pending, _street.lot_address(house), _street.recorded_labels(house, pending.documented))
+	_preview_ui.choice.connect(_on_preview_choice)
+	add_child(_preview_ui)
+	_street.ui_locked = true
+	Sfx.play("shutter")
+	Settings.haptic(25)
+
+
+func _close_preview() -> void:
+	if is_instance_valid(_preview_ui):
+		_preview_ui.queue_free()
+	_preview_ui = null
+
+
+func _on_preview_choice(name: String) -> void:
+	var shot := _pending_shot
+	_pending_shot = {}
+	_close_preview()
+	match name:
+		"use":
+			_street.commit_photo(shot)
+			Sfx.play("good")
+			# Sometimes the resident notices the camera and comes out before you decide anything.
+			if not _photo_scene_done.has(_active):
+				_photo_scene_done[_active] = true
+				await _play_encounter(_active, "photo")
+			if not _is_over and sim.assignments.has(_active) and not _active in sim.completed and not _overlay.visible:
+				_open_property_card(_active)
+		"another":
+			_street.commit_photo(shot)
+			_street.ui_locked = false
+			_street.open_camera(true)
+		"retake":
+			_street.ui_locked = false
+			_street.open_camera(true)
+		_:
+			_open_property_card(_active)
 
 
 ## Evidence as the rules see it: photos, plus a precise lawn measurement for tall grass.
@@ -631,6 +841,7 @@ func _open_case_sheet(house: int) -> void:
 		"violations": rows, "options_for": func(cited: Array) -> Dictionary: return sim.ruling_options(house, cited, evidence),
 	})
 	case_file.ruled.connect(_on_case_ruled)
+	case_file.closed.connect(_back_to_card)
 	_overlay.add_child(case_file)
 	case_file.position = ((size - CASE_FILE_SCRIPT.PANEL_SIZE) / 2.0).max(Vector2(8, 8))
 
@@ -659,14 +870,14 @@ func _on_case_ruled(action: String, cited: Array) -> void:
 	var house := _active
 	var result := sim.rule_case(house, action, cited, _evidence_for(house))
 	_apply_result(result, "%s · %s" % ["Fine" if action == "fine" else ("Wrongful citation" if not bool(result.correct) else "Enforcement"), _street.lot_address(house)])
-	_notify("important" if action in ["hearing", "fine"] else "medium",
-			{"dismiss": "Complaint dismissed", "warning": "Warning issued", "hearing": "Hearing scheduled", "fine": "Fine issued"}.get(action, "Ruling recorded"))
 	if action == "fine" and bool(result.correct):
 		career.bump("fines")
 		_award("first_fine")
 		if "tall_grass" in cited:
 			_award("not_on_my_lawn")
 	await _play_encounter(house, action)
+	_notify("important" if action in ["hearing", "fine"] else "medium",
+			{"dismiss": "Complaint dismissed", "warning": "Warning issued", "hearing": "Hearing scheduled", "fine": "Fine issued"}.get(action, "Ruling recorded"))
 	_finish_case(house)
 
 
@@ -712,10 +923,18 @@ func _play_encounter(house: int, trigger: String) -> void:
 	Sfx.set_mood("absurd" if str(enc.get("tone", "")) in ["slapstick", "comic"] else ("tense" if str(enc.get("tone", "")) in ["angry", "tense"] else "calm"))
 	Sfx.play("door")
 	_street.begin_cinematic(house)
-	await get_tree().create_timer(0.9 if not Settings.reduce_motion else 0.2).timeout
+	# HUD fades out while the camera pushes toward the front door.
+	var fade_out := create_tween().set_parallel(true)
+	fade_out.tween_property(_street.hud_view, "modulate:a", 0.0, 0.35)
+	for node: Control in [_info_row, _details, _task_label]:
+		fade_out.tween_property(node, "modulate:a", 0.0, 0.35)
+	await get_tree().create_timer(0.7 if not Settings.reduce_motion else 0.2).timeout
 	if _is_over:
 		_street.end_cinematic()
 		_encounter_active = false
+		_street.hud_view.modulate.a = 1.0
+		for node: Control in [_info_row, _details, _task_label]:
+			node.modulate.a = 1.0
 		return
 	var styles: Array = _street.world_view.styles()
 	var style: Dictionary = styles[house] if house < styles.size() else {}
@@ -742,6 +961,10 @@ func _play_encounter(house: int, trigger: String) -> void:
 	_street.end_cinematic()
 	_encounter_active = false
 	Sfx.set_mood("calm")
+	var fade_in := create_tween().set_parallel(true)
+	fade_in.tween_property(_street.hud_view, "modulate:a", 1.0, 0.4)
+	for node: Control in [_info_row, _details, _task_label]:
+		fade_in.tween_property(node, "modulate:a", 1.0, 0.4)
 	_refresh()
 
 
@@ -775,8 +998,7 @@ func _on_discover(house: int) -> void:
 
 func _on_photo(_house: int, quality: int, usable: bool, documented: Array) -> void:
 	if not usable:
-		GameState.add_score(-10)
-		Sfx.play("bad")
+		Sfx.play("bad")      # no score penalty: a bad frame is just a retry
 		return
 	Sfx.play("shutter")
 	Settings.haptic(25)
@@ -796,10 +1018,12 @@ func _run_hearing(house: int) -> void:
 	_overlay.show()
 	Sfx.set_loop("murmur", 0.8)
 	Sfx.set_mood("tense")
+	_hearing_active = true
 	var panel: Panel = HearingPanel.new()
 	panel.setup(info)
 	panel.decided.connect(func(recommendation: String, present: bool):
 		_close_overlay()
+		_hearing_active = false
 		var result := sim.hold_hearing(house, recommendation, present)
 		Settings.haptic(45)
 		if sim.board.tally(result.votes) == 3:
@@ -1010,6 +1234,7 @@ func _show_evening(finished: int, bonus: Dictionary) -> void:
 # ---------------------------------------------------------------- HUD
 
 func _close_overlay() -> void:
+	_hearing_active = false
 	Sfx.set_loop("murmur", 0.0)
 	Sfx.set_mood("calm")
 	for child in _overlay.get_children():
@@ -1019,6 +1244,8 @@ func _close_overlay() -> void:
 
 
 func _on_game_over(reason: String) -> void:
+	_close_property_card()
+	_close_preview()
 	_is_over = true
 	_close_overlay()
 	_over_label.text = "%s\n\nSurvived %d days.\nScore %s  ·  Best %s" % [reason, GameState.day - 1, _commas(GameState.score), _commas(GameState.best)]
@@ -1085,21 +1312,71 @@ func _float(text: String, color: Color) -> void:
 func _float_small(text: String) -> void:
 	if _overlay.visible:
 		return
+	var slot := _small_floats
+	_small_floats += 1
 	var label := _make_label(text, 26, Color.WHITE, true)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	label.add_theme_constant_override("outline_size", 6)
 	label.size = Vector2(size.x - 80, 60)
-	label.position = Vector2(40, size.y * 0.42)
+	label.position = Vector2(40, size.y * 0.42 + slot * 46.0)
 	label.z_index = 20
 	add_child(label)
 	var tween := create_tween()
 	tween.tween_property(label, "modulate:a", 0.0, 1.4).set_delay(0.8)
-	tween.tween_callback(label.queue_free)
+	tween.tween_callback(func():
+		_small_floats = maxi(0, _small_floats - 1)
+		label.queue_free())
+
+
+## The one source of truth for "what owns the screen right now". Derived from the nodes that
+## are actually showing, so it cannot drift out of sync with the UI. WORLD means the player can walk.
+func _compute_ui_state() -> String:
+	if _encounter_active:
+		return "CINEMATIC"
+	if is_instance_valid(_preview_ui):
+		return "PHOTO_PREVIEW"
+	if _street.camera_ev.active:
+		return "CAMERA"
+	if is_instance_valid(_card_ui):
+		return "COMPLAINT_VIEW" if (_card_ui as PropertyCard).expanded() else "PROPERTY_CONTEXT"
+	if _overlay.visible:
+		return "HEARING" if _hearing_active else "CASE_DECISION"
+	if is_instance_valid(_title) or is_instance_valid(_modal) or is_instance_valid(_update_prompt) or _is_over:
+		return "MODAL"
+	return "WORLD"
+
+
+## Backs out of the topmost layer: the same action every Back/Close button performs.
+func close_topmost() -> bool:
+	match ui_state:
+		"PHOTO_PREVIEW":
+			_on_preview_choice("cancel")
+		"CAMERA":
+			_street.cancel_camera()
+		"PROPERTY_CONTEXT", "COMPLAINT_VIEW":
+			_on_card_action("back")
+		"CASE_DECISION":
+			_back_to_card()
+		"MODAL":
+			if is_instance_valid(_modal):
+				_close_modal()
+			else:
+				return false
+		_:
+			if _street.hud_view.gallery_open:
+				_street.hud_view.gallery_open = false
+			elif _street.hud_view.map_open:
+				_street.hud_view.map_open = false
+			else:
+				return false
+	return true
 
 
 func _process(_delta: float) -> void:
 	if not is_instance_valid(_street) or _street.house_count() == 0:
 		return
+	ui_state = _compute_ui_state()
+	_street.ui_locked = ui_state != "WORLD" and ui_state != "CAMERA"
 	_street.warm_up = _overlay.visible or is_instance_valid(_title) or is_instance_valid(_modal)
 	if _street.debug_view and OS.is_debug_build():
 		_debug_clock -= _delta
@@ -1115,27 +1392,31 @@ func _process(_delta: float) -> void:
 
 ## First-day coaching: one short line at a time, gone once the loop is understood.
 func _update_hint() -> void:
-	if Settings.tutorial_done or GameState.day != 1 or _phase != "street" or _overlay.visible or is_instance_valid(_title):
+	if Settings.tutorial_done or GameState.day != 1 or _phase != "street" or _overlay.visible or is_instance_valid(_title) or _encounter_active:
 		_street.set_hint("")
 		return
 	var hint := ""
 	var target: int = _street.objective
-	if not _street.used:
-		hint = "Drag anywhere to walk · pinch to zoom"
-	elif target < 0 and not sim.completed.is_empty():
-		hint = "Good work. Warnings start a cure period; you'll be back to reinspect."
-	elif target >= 0 and _street.near != target:
-		var gap: float = _street.player.position.distance_to(_street.hood.lots[target].driveway_mid())
-		if gap > 450.0:
-			hint = "Walk to the gold pin: %s" % _street.lot_address(target)
-		else:
-			hint = "Approach the mailbox at %s" % _street.lot_address(target)
-	elif target >= 0 and not _street.get_evidence().has(target) and not _street.camera_ev.active:
-		hint = "Tap the camera to photograph the property"
-	elif target >= 0 and _street.camera_ev.active:
-		hint = "Center the house, then tap the shutter"
-	elif target >= 0:
-		hint = "Tap INSPECT PROPERTY to open the case sheet"
+	match ui_state:
+		"WORLD":
+			if not _street.used:
+				hint = "Drag anywhere to walk · pinch to zoom"
+			elif target < 0 and not sim.completed.is_empty():
+				hint = "Good work. Warnings start a cure period; you'll be back to reinspect."
+			elif target >= 0 and _street.near != target:
+				var gap: float = _street.player.position.distance_to(_street.hood.lots[target].inspect_anchor())
+				hint = ("Follow the gold arrow to %s" % _street.lot_address(target)) if gap > 450.0 else ("Approach %s" % _street.lot_address(target))
+			elif target >= 0:
+				hint = "Tap INSPECT"
+		"PROPERTY_CONTEXT", "COMPLAINT_VIEW":
+			if target >= 0 and not _street.get_evidence().has(target):
+				hint = "Tap TAKE PHOTO"
+			elif target >= 0:
+				hint = "Tap REVIEW & DECIDE"
+		"CAMERA":
+			hint = "Frame the issue, then tap the shutter"
+		"PHOTO_PREVIEW":
+			hint = "Tap USE PHOTO"
 	_street.set_hint(hint)
 
 
@@ -1156,6 +1437,7 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	var info := HBoxContainer.new()
+	_info_row = info
 	info.add_theme_constant_override("separation", 10)
 	vbox.add_child(info)
 	_day_label = _make_label("DAY 1", 26, Color.WHITE)
@@ -1170,7 +1452,7 @@ func _build_ui() -> void:
 	info.add_child(_score_label)
 	_stats_button = Button.new()
 	_stats_button.text = "STATS"
-	_stats_button.custom_minimum_size = Vector2(104, 48)
+	_stats_button.custom_minimum_size = Vector2(112, 58)
 	_stats_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_stats_button.add_theme_font_size_override("font_size", 18)
 	_stats_button.pressed.connect(func():
@@ -1179,7 +1461,7 @@ func _build_ui() -> void:
 	info.add_child(_stats_button)
 	_menu_button = Button.new()
 	_menu_button.text = "MENU"
-	_menu_button.custom_minimum_size = Vector2(104, 48)
+	_menu_button.custom_minimum_size = Vector2(112, 58)
 	_menu_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_menu_button.add_theme_font_size_override("font_size", 18)
 	_menu_button.pressed.connect(func():
@@ -1230,6 +1512,9 @@ func _build_ui() -> void:
 	_street.visit.connect(_on_visit)
 	_street.photo_taken.connect(_on_photo)
 	_street.discover.connect(_on_discover)
+	_street.camera_exit.connect(_on_camera_exit)
+	_street.photo_captured.connect(_on_photo_captured)
+	_street.preview_enabled = true
 	_street.evidence_changed.connect(func(): _save_progress())
 	vbox.add_child(_street)
 	_task_label = _make_label("", 22, Color.WHITE, true)

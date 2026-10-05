@@ -1,230 +1,856 @@
 [
   {
-    "id": "tall_grass", "name": "Tall grass", "category": "Landscaping", "severity": 1, "cure_days": 2,
-    "fine": [50, 150], "evidence": "photo or measurement", "location": "front lawn", "seasons": [0, 1, 2],
-    "object": "weeds", "description": "Lawn taller than 6 inches.",
+    "id": "tall_grass",
+    "name": "Tall grass",
+    "category": "Landscaping",
+    "severity": 1,
+    "cure_days": 2,
+    "fine": [
+      50,
+      150
+    ],
+    "evidence": "photo or measurement",
+    "location": "front lawn",
+    "seasons": [
+      0,
+      1,
+      2
+    ],
+    "object": "weeds",
+    "description": "Lawn taller than 6 inches.",
     "complaints": [
       "Is that a lawn or a hay farm? The limit is 6 inches.",
       "I saw a rabbit go in and not come out. Please measure the grass.",
       "It's technically a meadow, but not an approved one."
     ],
-    "false_hints": ["Measured 5.8 inches. Technically legal.", "The mower was in the driveway. It was mowed this morning."],
+    "false_hints": [
+      "Measured 5.8 inches. Technically legal.",
+      "The mower was in the driveway. It was mowed this morning."
+    ],
     "borderline_note": "Measured 6.1 inches against a 6.0 inch limit."
   },
   {
-    "id": "dead_lawn", "name": "Dead lawn", "category": "Landscaping", "severity": 1, "cure_days": 3,
-    "fine": [40, 120], "evidence": "photo", "location": "front lawn", "seasons": [0, 1, 2],
-    "object": "dead_lawn", "description": "Lawn is brown and dead beyond seasonal dormancy.",
-    "complaints": ["That lawn has given up on life.", "It's brown. In May. Someone should be concerned.", "The grass has retired and nobody told the board."],
-    "false_hints": ["Fresh sod, still settling in.", "Just a drought patch; the sprinkler schedule is compliant."],
+    "id": "dead_lawn",
+    "name": "Dead lawn",
+    "category": "Landscaping",
+    "severity": 1,
+    "cure_days": 3,
+    "fine": [
+      40,
+      120
+    ],
+    "evidence": "photo",
+    "location": "front lawn",
+    "seasons": [
+      0,
+      1,
+      2
+    ],
+    "object": "dead_lawn",
+    "description": "Lawn is brown and dead beyond seasonal dormancy.",
+    "complaints": [
+      "That lawn has given up on life.",
+      "It's brown. In May. Someone should be concerned.",
+      "The grass has retired and nobody told the board."
+    ],
+    "false_hints": [
+      "Fresh sod, still settling in.",
+      "Just a drought patch; the sprinkler schedule is compliant."
+    ],
     "borderline_note": "Roughly a third of the lawn is brown; the rule says half."
   },
   {
-    "id": "weeds", "name": "Weeds in beds", "category": "Landscaping", "severity": 1, "cure_days": 3,
-    "fine": [25, 75], "evidence": "photo", "location": "front beds", "seasons": [0, 1, 2],
-    "object": "weed_bed", "description": "Planting beds overrun with weeds.",
-    "complaints": ["The flower beds are mostly dandelions now.", "Those weeds have their own zip code."],
-    "false_hints": ["Wildflowers, labeled and approved by the architectural committee."],
+    "id": "weeds",
+    "name": "Weeds in beds",
+    "category": "Landscaping",
+    "severity": 1,
+    "cure_days": 3,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "front beds",
+    "seasons": [
+      0,
+      1,
+      2
+    ],
+    "object": "weed_bed",
+    "description": "Planting beds overrun with weeds.",
+    "complaints": [
+      "The flower beds are mostly dandelions now.",
+      "Those weeds have their own zip code."
+    ],
+    "false_hints": [
+      "Wildflowers, labeled and approved by the architectural committee."
+    ],
     "borderline_note": "A few weeds, but the beds are mostly maintained."
   },
   {
-    "id": "shrubs", "name": "Overgrown shrubs", "category": "Landscaping", "severity": 1, "cure_days": 4,
-    "fine": [25, 100], "evidence": "photo", "location": "foundation", "seasons": [0, 1, 2],
-    "object": "shrubs", "description": "Shrubs blocking the walkway or sight lines.",
-    "complaints": ["The hedge has eaten the sidewalk.", "I can't see the mailbox through the shrubbery. Neither can the mailman."],
-    "false_hints": ["Trimmed last week. Spring growth looks dramatic."],
+    "id": "shrubs",
+    "name": "Overgrown shrubs",
+    "category": "Landscaping",
+    "severity": 1,
+    "cure_days": 4,
+    "fine": [
+      25,
+      100
+    ],
+    "evidence": "photo",
+    "location": "foundation",
+    "seasons": [
+      0,
+      1,
+      2
+    ],
+    "object": "shrubs",
+    "description": "Shrubs blocking the walkway or sight lines.",
+    "complaints": [
+      "The hedge has eaten the sidewalk.",
+      "I can't see the mailbox through the shrubbery. Neither can the mailman."
+    ],
+    "false_hints": [
+      "Trimmed last week. Spring growth looks dramatic."
+    ],
     "borderline_note": "Hedge is 4 inches over the allowed height."
   },
   {
-    "id": "dead_tree", "name": "Dead tree", "category": "Landscaping", "severity": 2, "cure_days": 7,
-    "fine": [100, 250], "evidence": "photo", "location": "yard", "seasons": [0, 1, 2, 3],
-    "object": "dead_tree", "description": "Dead tree that could fall on a neighboring lot.",
-    "complaints": ["That tree is dead and leaning toward my fence.", "A dead tree in a storm is a lawsuit with leaves."],
-    "false_hints": ["Dormant, not dead. It has buds."],
+    "id": "dead_tree",
+    "name": "Dead tree",
+    "category": "Landscaping",
+    "severity": 2,
+    "cure_days": 7,
+    "fine": [
+      100,
+      250
+    ],
+    "evidence": "photo",
+    "location": "yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "dead_tree",
+    "description": "Dead tree that could fall on a neighboring lot.",
+    "complaints": [
+      "That tree is dead and leaning toward my fence.",
+      "A dead tree in a storm is a lawsuit with leaves."
+    ],
+    "false_hints": [
+      "Dormant, not dead. It has buds."
+    ],
     "borderline_note": "Half the tree is bare; arborist report pending."
   },
   {
-    "id": "landscaping", "name": "Unapproved landscaping", "category": "Landscaping", "severity": 1, "cure_days": 5,
-    "fine": [50, 150], "evidence": "photo", "location": "front yard", "seasons": [0, 1, 2, 3],
-    "object": "gnomes", "description": "Rock garden or decor not approved by the committee.",
-    "complaints": ["There are forty gnomes. I counted.", "A rock garden appeared overnight. No paperwork."],
-    "false_hints": ["Approved last spring. The approval letter is in the file."],
+    "id": "landscaping",
+    "name": "Unapproved landscaping",
+    "category": "Landscaping",
+    "severity": 1,
+    "cure_days": 5,
+    "fine": [
+      50,
+      150
+    ],
+    "evidence": "photo",
+    "location": "front yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "gnomes",
+    "description": "Rock garden or decor not approved by the committee.",
+    "complaints": [
+      "There are forty gnomes. I counted.",
+      "A rock garden appeared overnight. No paperwork."
+    ],
+    "false_hints": [
+      "Approved last spring. The approval letter is in the file."
+    ],
     "borderline_note": "Three gnomes. The rule allows two."
   },
   {
-    "id": "rv", "name": "RV over 72 hours", "category": "Parking", "severity": 2, "cure_days": 2,
-    "fine": [100, 300], "evidence": "photo plus timestamps", "location": "driveway", "seasons": [0, 1, 2, 3],
-    "object": "rv", "description": "Recreational vehicle parked in view for more than 72 hours.",
-    "complaints": ["That RV has been there for a week. I have a calendar.", "A small cruise ship is parked in a driveway on my street."],
-    "false_hints": ["The RV arrived this morning for loading.", "Visiting relatives. They leave in two days."],
+    "id": "rv",
+    "name": "RV over 72 hours",
+    "category": "Parking",
+    "severity": 2,
+    "cure_days": 2,
+    "fine": [
+      100,
+      300
+    ],
+    "evidence": "photo plus timestamps",
+    "location": "driveway",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "rv",
+    "description": "Recreational vehicle parked in view for more than 72 hours.",
+    "complaints": [
+      "That RV has been there for a week. I have a calendar.",
+      "A small cruise ship is parked in a driveway on my street."
+    ],
+    "false_hints": [
+      "The RV arrived this morning for loading.",
+      "Visiting relatives. They leave in two days."
+    ],
     "borderline_note": "Parked for 76 hours. Rule says 72."
   },
   {
-    "id": "boat", "name": "Boat stored outside", "category": "Parking", "severity": 2, "cure_days": 5,
-    "fine": [75, 250], "evidence": "photo", "location": "side yard", "seasons": [0, 1, 2, 3],
-    "object": "boat", "description": "Boat or trailer stored in view of the street.",
-    "complaints": ["There's a boat in a landlocked subdivision.", "Whatever that vessel is, it is not an approved lawn ornament."],
-    "false_hints": ["The boat is behind an approved screen fence."],
+    "id": "boat",
+    "name": "Boat stored outside",
+    "category": "Parking",
+    "severity": 2,
+    "cure_days": 5,
+    "fine": [
+      75,
+      250
+    ],
+    "evidence": "photo",
+    "location": "side yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "boat",
+    "description": "Boat or trailer stored in view of the street.",
+    "complaints": [
+      "There's a boat in a landlocked subdivision.",
+      "Whatever that vessel is, it is not an approved lawn ornament."
+    ],
+    "false_hints": [
+      "The boat is behind an approved screen fence."
+    ],
     "borderline_note": "Half the boat is visible over the fence."
   },
   {
-    "id": "commercial_vehicle", "name": "Commercial vehicle", "category": "Parking", "severity": 2, "cure_days": 2,
-    "fine": [75, 200], "evidence": "photo", "location": "driveway", "seasons": [0, 1, 2, 3],
-    "object": "van", "description": "Vehicle with commercial lettering parked overnight.",
-    "complaints": ["A work van is parked there every night.", "That van has a ladder and a logo. Commercial."],
-    "false_hints": ["A personal van with no markings."],
+    "id": "commercial_vehicle",
+    "name": "Commercial vehicle",
+    "category": "Parking",
+    "severity": 2,
+    "cure_days": 2,
+    "fine": [
+      75,
+      200
+    ],
+    "evidence": "photo",
+    "location": "driveway",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "van",
+    "description": "Vehicle with commercial lettering parked overnight.",
+    "complaints": [
+      "A work van is parked there every night.",
+      "That van has a ladder and a logo. Commercial."
+    ],
+    "false_hints": [
+      "A personal van with no markings."
+    ],
     "borderline_note": "Small magnet sign on the door. Might be commercial."
   },
   {
-    "id": "lawn_parking", "name": "Vehicle on lawn", "category": "Parking", "severity": 2, "cure_days": 1,
-    "fine": [50, 150], "evidence": "photo", "location": "front lawn", "seasons": [0, 1, 2, 3],
-    "object": "car", "description": "Vehicle parked on grass.",
-    "complaints": ["Someone is parking on the lawn like it's a drive-in.", "There are tire tracks where the grass used to be."],
-    "false_hints": ["Delivery vehicle, gone within the hour."],
+    "id": "lawn_parking",
+    "name": "Vehicle on lawn",
+    "category": "Parking",
+    "severity": 2,
+    "cure_days": 1,
+    "fine": [
+      50,
+      150
+    ],
+    "evidence": "photo",
+    "location": "front lawn",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "car",
+    "description": "Vehicle parked on grass.",
+    "complaints": [
+      "Someone is parking on the lawn like it's a drive-in.",
+      "There are tire tracks where the grass used to be."
+    ],
+    "false_hints": [
+      "Delivery vehicle, gone within the hour."
+    ],
     "borderline_note": "Two wheels on the grass, two on the driveway."
   },
   {
-    "id": "broken_vehicle", "name": "Inoperable vehicle", "category": "Parking", "severity": 2, "cure_days": 4,
-    "fine": [75, 200], "evidence": "photo", "location": "driveway", "seasons": [0, 1, 2, 3],
-    "object": "car", "description": "Vehicle with flat tires or missing parts stored in view.",
-    "complaints": ["That car has been dead since the last election.", "A flat tire and a hood propped open. For months."],
-    "false_hints": ["It runs. The tire is being swapped today."],
+    "id": "broken_vehicle",
+    "name": "Inoperable vehicle",
+    "category": "Parking",
+    "severity": 2,
+    "cure_days": 4,
+    "fine": [
+      75,
+      200
+    ],
+    "evidence": "photo",
+    "location": "driveway",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "car",
+    "description": "Vehicle with flat tires or missing parts stored in view.",
+    "complaints": [
+      "That car has been dead since the last election.",
+      "A flat tire and a hood propped open. For months."
+    ],
+    "false_hints": [
+      "It runs. The tire is being swapped today."
+    ],
     "borderline_note": "One flat tire and fresh registration."
   },
   {
-    "id": "street_parking", "name": "Excess street parking", "category": "Parking", "severity": 1, "cure_days": 1,
-    "fine": [25, 75], "evidence": "photo", "location": "curb", "seasons": [0, 1, 2, 3],
-    "object": "street_cars", "description": "More vehicles parked on the street than the rules allow.",
-    "complaints": ["Five cars on the curb. I counted.", "There's a car convention outside my house."],
-    "false_hints": ["A neighbor's birthday party. All gone by tonight."],
+    "id": "street_parking",
+    "name": "Excess street parking",
+    "category": "Parking",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "curb",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "street_cars",
+    "description": "More vehicles parked on the street than the rules allow.",
+    "complaints": [
+      "Five cars on the curb. I counted.",
+      "There's a car convention outside my house."
+    ],
+    "false_hints": [
+      "A neighbor's birthday party. All gone by tonight."
+    ],
     "borderline_note": "Three cars on the street. Limit is three."
   },
   {
-    "id": "paint", "name": "Exterior color violation", "category": "Exterior", "severity": 1, "cure_days": 14,
-    "fine": [50, 200], "evidence": "photo", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "paint", "description": "Exterior color not on the approved palette.",
-    "complaints": ["The house is Eggshell, not Antique Ivory. I have a color chart.", "That shade of coral is not on the approved palette."],
-    "false_hints": ["It is Antique Ivory. The light in the photo lies."],
+    "id": "paint",
+    "name": "Exterior color violation",
+    "category": "Exterior",
+    "severity": 1,
+    "cure_days": 14,
+    "fine": [
+      50,
+      200
+    ],
+    "evidence": "photo",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "paint",
+    "description": "Exterior color not on the approved palette.",
+    "complaints": [
+      "The house is Eggshell, not Antique Ivory. I have a color chart.",
+      "That shade of coral is not on the approved palette."
+    ],
+    "false_hints": [
+      "It is Antique Ivory. The light in the photo lies."
+    ],
     "borderline_note": "A shade lighter than approved."
   },
   {
-    "id": "siding", "name": "Damaged siding", "category": "Exterior", "severity": 2, "cure_days": 14,
-    "fine": [75, 250], "evidence": "photo", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "damage", "description": "Visible damage to siding or trim.",
-    "complaints": ["Parts of that house are falling off.", "The siding is missing planks. Birds are moving in."],
-    "false_hints": ["Shadow from the tree, not damage."],
+    "id": "siding",
+    "name": "Damaged siding",
+    "category": "Exterior",
+    "severity": 2,
+    "cure_days": 14,
+    "fine": [
+      75,
+      250
+    ],
+    "evidence": "photo",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "damage",
+    "description": "Visible damage to siding or trim.",
+    "complaints": [
+      "Parts of that house are falling off.",
+      "The siding is missing planks. Birds are moving in."
+    ],
+    "false_hints": [
+      "Shadow from the tree, not damage."
+    ],
     "borderline_note": "One cracked panel, hardly a crisis."
   },
   {
-    "id": "roof", "name": "Roof in disrepair", "category": "Exterior", "severity": 2, "cure_days": 14,
-    "fine": [100, 300], "evidence": "photo", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "tarp", "description": "Missing shingles or a blue tarp on the roof.",
-    "complaints": ["There is a blue tarp where a roof used to be.", "Shingles are in my yard again."],
-    "false_hints": ["Roofers are scheduled. The tarp is temporary and approved."],
+    "id": "roof",
+    "name": "Roof in disrepair",
+    "category": "Exterior",
+    "severity": 2,
+    "cure_days": 14,
+    "fine": [
+      100,
+      300
+    ],
+    "evidence": "photo",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "tarp",
+    "description": "Missing shingles or a blue tarp on the roof.",
+    "complaints": [
+      "There is a blue tarp where a roof used to be.",
+      "Shingles are in my yard again."
+    ],
+    "false_hints": [
+      "Roofers are scheduled. The tarp is temporary and approved."
+    ],
     "borderline_note": "Two shingles missing."
   },
   {
-    "id": "fence", "name": "Unapproved fence", "category": "Exterior", "severity": 1, "cure_days": 10,
-    "fine": [50, 200], "evidence": "photo plus measurement", "location": "property line", "seasons": [0, 1, 2, 3],
-    "object": "fence", "description": "Fence taller or different from the approved plan.",
-    "complaints": ["That fence is taller than the rules say.", "A fence appeared without a permit. It's very confident."],
-    "false_hints": ["Four feet. Exactly to code."],
+    "id": "fence",
+    "name": "Unapproved fence",
+    "category": "Exterior",
+    "severity": 1,
+    "cure_days": 10,
+    "fine": [
+      50,
+      200
+    ],
+    "evidence": "photo plus measurement",
+    "location": "property line",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "fence",
+    "description": "Fence taller or different from the approved plan.",
+    "complaints": [
+      "That fence is taller than the rules say.",
+      "A fence appeared without a permit. It's very confident."
+    ],
+    "false_hints": [
+      "Four feet. Exactly to code."
+    ],
     "borderline_note": "Measured 6 ft 1 in. Approved limit is 6 ft."
   },
   {
-    "id": "shed", "name": "Unapproved shed", "category": "Exterior", "severity": 2, "cure_days": 10,
-    "fine": [75, 250], "evidence": "photo", "location": "backyard", "seasons": [0, 1, 2, 3],
-    "object": "shed", "description": "Storage shed without architectural approval.",
-    "complaints": ["A shed appeared. Nobody asked the committee.", "There's a building in their backyard now."],
-    "false_hints": ["Approved shed. The permit is taped to the door."],
+    "id": "shed",
+    "name": "Unapproved shed",
+    "category": "Exterior",
+    "severity": 2,
+    "cure_days": 10,
+    "fine": [
+      75,
+      250
+    ],
+    "evidence": "photo",
+    "location": "backyard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "shed",
+    "description": "Storage shed without architectural approval.",
+    "complaints": [
+      "A shed appeared. Nobody asked the committee.",
+      "There's a building in their backyard now."
+    ],
+    "false_hints": [
+      "Approved shed. The permit is taped to the door."
+    ],
     "borderline_note": "Slightly bigger than the approved plan."
   },
   {
-    "id": "addition", "name": "Unapproved addition", "category": "Exterior", "severity": 3, "cure_days": 21,
-    "fine": [250, 1000], "evidence": "photo", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "addition", "description": "Structural addition without approval.",
-    "complaints": ["The house grew a new room. Overnight.", "There is scaffolding and no permit."],
-    "false_hints": ["A permitted deck repair."],
+    "id": "addition",
+    "name": "Unapproved addition",
+    "category": "Exterior",
+    "severity": 3,
+    "cure_days": 21,
+    "fine": [
+      250,
+      1000
+    ],
+    "evidence": "photo",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "addition",
+    "description": "Structural addition without approval.",
+    "complaints": [
+      "The house grew a new room. Overnight.",
+      "There is scaffolding and no permit."
+    ],
+    "false_hints": [
+      "A permitted deck repair."
+    ],
     "borderline_note": "A covered porch, possibly under the size threshold."
   },
   {
-    "id": "noise", "name": "Noise complaint", "category": "Nuisance", "severity": 1, "cure_days": 1,
-    "fine": [25, 100], "evidence": "observation", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "noise", "description": "Noise outside quiet hours.",
-    "complaints": ["Someone ran a leaf blower at 7:59 AM. Quiet hours begin at 8:00.", "There is a drum set. There is always a drum set."],
-    "false_hints": ["A video call. The speaker was loud, not illegal."],
+    "id": "noise",
+    "name": "Noise complaint",
+    "category": "Nuisance",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      100
+    ],
+    "evidence": "observation",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "noise",
+    "description": "Noise outside quiet hours.",
+    "complaints": [
+      "Someone ran a leaf blower at 7:59 AM. Quiet hours begin at 8:00.",
+      "There is a drum set. There is always a drum set."
+    ],
+    "false_hints": [
+      "A video call. The speaker was loud, not illegal."
+    ],
     "borderline_note": "Music audible at the property line, barely."
   },
   {
-    "id": "trash", "name": "Trash left out", "category": "Nuisance", "severity": 1, "cure_days": 1,
-    "fine": [25, 75], "evidence": "photo", "location": "curb", "seasons": [0, 1, 2, 3],
-    "object": "trash", "description": "Trash or bags left outside past collection day.",
-    "complaints": ["Garbage bags are decorating the curb.", "Trash day was yesterday. The bags did not get the memo."],
-    "false_hints": ["Collection hasn't happened yet today."],
+    "id": "trash",
+    "name": "Trash left out",
+    "category": "Nuisance",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "curb",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "trash",
+    "description": "Trash or bags left outside past collection day.",
+    "complaints": [
+      "Garbage bags are decorating the curb.",
+      "Trash day was yesterday. The bags did not get the memo."
+    ],
+    "false_hints": [
+      "Collection hasn't happened yet today."
+    ],
     "borderline_note": "Bins removed 30 minutes late."
   },
   {
-    "id": "curb_bins", "name": "Bins left at curb", "category": "Nuisance", "severity": 1, "cure_days": 1,
-    "fine": [25, 75], "evidence": "photo", "location": "curb", "seasons": [0, 1, 2, 3],
-    "object": "bins", "description": "Bins left at the curb after collection day.",
-    "complaints": ["The bins have lived at the curb since Tuesday.", "Those bins are becoming part of the landscape."],
-    "false_hints": ["Pickup was delayed by the holiday."],
+    "id": "curb_bins",
+    "name": "Bins left at curb",
+    "category": "Nuisance",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "curb",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "bins",
+    "description": "Bins left at the curb after collection day.",
+    "complaints": [
+      "The bins have lived at the curb since Tuesday.",
+      "Those bins are becoming part of the landscape."
+    ],
+    "false_hints": [
+      "Pickup was delayed by the holiday."
+    ],
     "borderline_note": "Bins out two hours after pickup."
   },
   {
-    "id": "debris", "name": "Trash or construction debris", "category": "Nuisance", "severity": 2, "cure_days": 3,
-    "fine": [75, 250], "evidence": "photo", "location": "side yard", "seasons": [0, 1, 2, 3],
-    "object": "debris", "description": "Dumpster or debris pile left in the yard.",
-    "complaints": ["There's a dumpster in the yard. Permit?", "A pile of old lumber has been there for weeks."],
-    "false_hints": ["Active renovation with a permit on file."],
+    "id": "debris",
+    "name": "Trash or construction debris",
+    "category": "Nuisance",
+    "severity": 2,
+    "cure_days": 3,
+    "fine": [
+      75,
+      250
+    ],
+    "evidence": "photo",
+    "location": "side yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "debris",
+    "description": "Dumpster or debris pile left in the yard.",
+    "complaints": [
+      "There's a dumpster in the yard. Permit?",
+      "A pile of old lumber has been there for weeks."
+    ],
+    "false_hints": [
+      "Active renovation with a permit on file."
+    ],
     "borderline_note": "A small pile, under the 7-day limit."
   },
   {
-    "id": "dog_waste", "name": "Pet waste issue", "category": "Nuisance", "severity": 1, "cure_days": 1,
-    "fine": [25, 75], "evidence": "photo", "location": "front lawn", "seasons": [0, 1, 2, 3],
-    "object": "dog", "description": "Pet waste left on the lawn or common areas.",
-    "complaints": ["I'm stepping carefully on my own street.", "A dog has opinions about my lawn."],
-    "false_hints": ["Mulch. Just mulch."],
+    "id": "dog_waste",
+    "name": "Pet waste issue",
+    "category": "Nuisance",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "front lawn",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "dog",
+    "description": "Pet waste left on the lawn or common areas.",
+    "complaints": [
+      "I'm stepping carefully on my own street.",
+      "A dog has opinions about my lawn."
+    ],
+    "false_hints": [
+      "Mulch. Just mulch."
+    ],
     "borderline_note": "One, long-dried, could be mulch."
   },
   {
-    "id": "decorations", "name": "Expired decorations", "category": "Nuisance", "severity": 1, "cure_days": 2,
-    "fine": [25, 100], "evidence": "photo", "location": "front yard", "seasons": [0, 1, 2, 3],
-    "object": "decorations", "description": "Seasonal decorations beyond the allowed window.",
-    "complaints": ["My neighbor's inflatable Santa is up. It is October.", "Santa needs time to acclimate, but not in July."],
-    "false_hints": ["Decorations are inside the allowed window."],
+    "id": "decorations",
+    "name": "Expired decorations",
+    "category": "Nuisance",
+    "severity": 1,
+    "cure_days": 2,
+    "fine": [
+      25,
+      100
+    ],
+    "evidence": "photo",
+    "location": "front yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "decorations",
+    "description": "Seasonal decorations beyond the allowed window.",
+    "complaints": [
+      "My neighbor's inflatable Santa is up. It is October.",
+      "Santa needs time to acclimate, but not in July."
+    ],
+    "false_hints": [
+      "Decorations are inside the allowed window."
+    ],
     "borderline_note": "One day past the deadline."
   },
   {
-    "id": "short_rental", "name": "Short-term rental activity", "category": "Use restrictions", "severity": 2, "cure_days": 3,
-    "fine": [150, 500], "evidence": "photos and pattern", "location": "house", "seasons": [0, 1, 2, 3],
-    "object": "rental", "description": "Frequent turnover of guests suggests a short-term rental.",
-    "complaints": ["A new group of people with suitcases every weekend.", "There is a lockbox on the door. This is not a hotel."],
-    "false_hints": ["A family visiting for Thanksgiving.", "A relative moving in for a few weeks."],
+    "id": "short_rental",
+    "name": "Short-term rental activity",
+    "category": "Use restrictions",
+    "severity": 2,
+    "cure_days": 3,
+    "fine": [
+      150,
+      500
+    ],
+    "evidence": "photos and pattern",
+    "location": "house",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "rental",
+    "description": "Frequent turnover of guests suggests a short-term rental.",
+    "complaints": [
+      "A new group of people with suitcases every weekend.",
+      "There is a lockbox on the door. This is not a hotel."
+    ],
+    "false_hints": [
+      "A family visiting for Thanksgiving.",
+      "A relative moving in for a few weeks."
+    ],
     "borderline_note": "Several guests, one weekend. Could be family."
   },
   {
-    "id": "business_traffic", "name": "Business traffic", "category": "Use restrictions", "severity": 2, "cure_days": 5,
-    "fine": [100, 300], "evidence": "photo", "location": "driveway", "seasons": [0, 1, 2, 3],
-    "object": "clients", "description": "Customers visiting a home business.",
-    "complaints": ["People are lining up at that house all day.", "That's not a book club. That's a salon."],
-    "false_hints": ["Piano lessons for one student. Allowed."],
+    "id": "business_traffic",
+    "name": "Business traffic",
+    "category": "Use restrictions",
+    "severity": 2,
+    "cure_days": 5,
+    "fine": [
+      100,
+      300
+    ],
+    "evidence": "photo",
+    "location": "driveway",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "clients",
+    "description": "Customers visiting a home business.",
+    "complaints": [
+      "People are lining up at that house all day.",
+      "That's not a book club. That's a salon."
+    ],
+    "false_hints": [
+      "Piano lessons for one student. Allowed."
+    ],
     "borderline_note": "Two visitors, once. Hard to call it a business."
   },
   {
-    "id": "yard_sign", "name": "Unapproved yard sign", "category": "Use restrictions", "severity": 1, "cure_days": 1,
-    "fine": [25, 75], "evidence": "photo", "location": "front yard", "seasons": [0, 1, 2, 3],
-    "object": "sign", "description": "Sign not allowed by the declaration.",
-    "complaints": ["There's a political sign. In a place where signs are not allowed.", "A sign advertising a very specific lawn guy."],
-    "false_hints": ["A realtor sign. Allowed for 30 days."],
+    "id": "yard_sign",
+    "name": "Unapproved yard sign",
+    "category": "Use restrictions",
+    "severity": 1,
+    "cure_days": 1,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "front yard",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "sign",
+    "description": "Sign not allowed by the declaration.",
+    "complaints": [
+      "There's a political sign. In a place where signs are not allowed.",
+      "A sign advertising a very specific lawn guy."
+    ],
+    "false_hints": [
+      "A realtor sign. Allowed for 30 days."
+    ],
     "borderline_note": "A small sign, partly hidden by a shrub."
   },
   {
-    "id": "hoop", "name": "Basketball hoop in street", "category": "Use restrictions", "severity": 1, "cure_days": 2,
-    "fine": [25, 75], "evidence": "photo", "location": "driveway edge", "seasons": [0, 1, 2, 3],
-    "object": "hoop", "description": "Portable hoop left in the street or sidewalk.",
-    "complaints": ["A basketball hoop is on the road. I am not Michael Jordan's insurance.", "Kids are dunking on my street."],
-    "false_hints": ["Hoop is on the driveway, inside the lot line."],
+    "id": "hoop",
+    "name": "Basketball hoop in street",
+    "category": "Use restrictions",
+    "severity": 1,
+    "cure_days": 2,
+    "fine": [
+      25,
+      75
+    ],
+    "evidence": "photo",
+    "location": "driveway edge",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "hoop",
+    "description": "Portable hoop left in the street or sidewalk.",
+    "complaints": [
+      "A basketball hoop is on the road. I am not Michael Jordan's insurance.",
+      "Kids are dunking on my street."
+    ],
+    "false_hints": [
+      "Hoop is on the driveway, inside the lot line."
+    ],
     "borderline_note": "Hoop base is two inches over the curb."
+  },
+  {
+    "id": "sidewalk_obstruction",
+    "name": "Sidewalk obstruction",
+    "category": "Maintenance",
+    "severity": 1,
+    "cure_days": 3,
+    "fine": [
+      40,
+      120
+    ],
+    "evidence": "photo",
+    "location": "sidewalk",
+    "seasons": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "object": "hedge",
+    "objects": [
+      "hedge",
+      "hedge",
+      "branch",
+      "bins",
+      "debris",
+      "materials"
+    ],
+    "description": "The public sidewalk must stay clear of plants, bins and materials.",
+    "complaints": [
+      "The hedge has swallowed half the sidewalk. Strollers can't get by.",
+      "I had to walk in the street because of the bushes at this house.",
+      "Something is blocking the sidewalk in front of this property again.",
+      "A low branch is blocking the walk. I keep getting hit in the face."
+    ],
+    "false_hints": [
+      "The sidewalk is clear. The hedge was trimmed last week.",
+      "Nothing blocks the walk; the complaint may be about the neighbor's yard."
+    ],
+    "borderline_note": "The hedge overhangs about six inches. Walkers can still pass."
   }
 ]

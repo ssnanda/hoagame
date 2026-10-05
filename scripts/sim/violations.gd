@@ -72,7 +72,7 @@ func make_allegation(def: Dictionary, reliability: float, rng: RandomNumberGener
 	return {
 		"id": str(def.id),
 		"label": str(def.name),
-		"object": str(def.get("object", "")),
+		"object": _pick_object(def, rng),
 		"category": str(def.get("category", "")),
 		"severity": int(def.get("severity", 1)),
 		"actual": actual,
@@ -83,6 +83,14 @@ func make_allegation(def: Dictionary, reliability: float, rng: RandomNumberGener
 		"borderline_note": str(def.get("borderline_note", "")),
 		"cure_days": int(def.get("cure_days", 2)),
 	}
+
+
+## Some violations have visual variants (a hedge, a branch, bins...). The data lists them.
+func _pick_object(def: Dictionary, rng: RandomNumberGenerator) -> String:
+	var variants: Array = def.get("objects", [])
+	if variants.is_empty():
+		return str(def.get("object", ""))
+	return str(variants[rng.randi() % variants.size()])
 
 
 func fine_amount(id: String, repeat_count: int) -> int:

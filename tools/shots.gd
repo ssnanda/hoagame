@@ -25,7 +25,7 @@ func _ready() -> void:
 	for i in 10:
 		await get_tree().process_frame
 	street = main._street
-	var list: Array = (only.split(",") if only != "" else ["title", "street", "hud_stats", "cul_de_sac", "weather", "seasons", "encounters", "menus", "maps", "flow", "life"])
+	var list: Array = (only.split(",") if only != "" else ["title", "street", "hud_stats", "cul_de_sac", "weather", "seasons", "encounters", "menus", "maps", "flow", "life", "card", "walk", "markers", "sign"])
 	for name in list:
 		await call("_shot_" + name)
 	get_tree().quit()
@@ -77,7 +77,7 @@ func _shot_cul_de_sac() -> void:
 		if l.kind == "cul_de_sac":
 			lot = l
 			break
-	_teleport(lot.driveway_mid())
+	_teleport(lot.inspect_anchor())
 	await _snap("04_cul_de_sac", 40)
 	var corner = null
 	for l in street.hood.lots:
@@ -85,14 +85,14 @@ func _shot_cul_de_sac() -> void:
 			corner = l
 			break
 	if corner != null:
-		_teleport(corner.driveway_mid())
+		_teleport(corner.inspect_anchor())
 		await _snap("05_corner_lot", 40)
 
 
 func _shot_weather() -> void:
 	await _ensure_started()
 	var lot = street.hood.lots[10]
-	_teleport(lot.driveway_mid())
+	_teleport(lot.inspect_anchor())
 	for kind in [0, 1, 2, 3, 4, 5, 6, 7]:
 		street.weather = kind
 		await _snap("06_weather_%d" % kind, 12)
@@ -188,7 +188,7 @@ func _shot_flow() -> void:
 	await get_tree().process_frame
 	var h := _first_house()
 	main._visited[h] = true
-	_teleport(street.hood.lots[h].driveway_mid())
+	_teleport(street.hood.lots[h].inspect_anchor())
 	await _snap("21_at_property", 30)
 	street.open_camera()
 	await _snap("22_camera_frame", 40)
@@ -220,7 +220,7 @@ func _shot_flow() -> void:
 	var r := _first_house("reinspect")
 	if r >= 0:
 		main._visited[r] = true
-		_teleport(street.hood.lots[r].driveway_mid())
+		_teleport(street.hood.lots[r].inspect_anchor())
 		main._on_visit(r)
 		await _snap("25_reinspect", 10)
 		main._close_overlay()
@@ -271,7 +271,7 @@ func _shot_life() -> void:
 	await _ensure_started()
 	var h := _first_house()
 	main._visited[h] = true
-	_teleport(street.hood.lots[h].driveway_mid() + Vector2(0, 60))
+	_teleport(street.hood.lots[h].inspect_anchor() + Vector2(0, 60))
 	await _snap("40_near_porch", 120)
 	street.player.cart = true
 	street.cart_fx = 1.0
@@ -290,3 +290,131 @@ func _shot_life() -> void:
 	await _snap("43_zoom_out", 60)
 	street.zoom_input.target = 1.7
 	await _snap("44_zoom_in", 60)
+
+
+func _press(text: String, node: Node = null) -> bool:
+	node = node if node != null else main
+	if node is Button and (node as Button).text == text and (node as Button).is_visible_in_tree():
+		(node as Button).pressed.emit()
+		return true
+	for child in node.get_children():
+		if _press(text, child):
+			return true
+	return false
+
+
+func _shot_card() -> void:
+	await _ensure_started()
+	main.sim.encounters.catalog = []
+	var h: int = street.objective
+	main._visited[h] = true
+	_teleport(street.hood.lots[h].inspect_anchor())
+	await _snap("50_arrival", 40)
+	street.inspect_near()
+	await _snap("51_card", 20)
+	if is_instance_valid(main._card_ui):
+		print("CARD rect ", main._card_ui.get_global_rect(), " sheet ", main._card_ui._sheet.get_global_rect(), " vis ", main._card_ui.visible, " z ", main._card_ui.z_index)
+	_press("VIEW COMPLAINT")
+	await _snap("52_card_details", 10)
+	_press("HIDE DETAILS")
+	_press("TAKE PHOTO")
+	await _snap("53_camera", 40)
+	for zoom in [1.4, 1.0, 1.8, 2.2]:
+		street.camera_ev.zoom = zoom
+		for i in 18:
+			await get_tree().process_frame
+		if bool(street.frame_info.get("potential", false)):
+			break
+	await street.take_photo()
+	await _snap("54_preview", 12)
+	_press("USE PHOTO")
+	await _snap("55_card_evidence", 12)
+	_press("REVIEW & DECIDE")
+	await _snap("56_case_sheet", 12)
+	# Off-screen arrow: walk away from the selected property.
+	main._close_overlay()
+	main._close_property_card()
+	_teleport(street.hood.lots[h].inspect_anchor() + Vector2(0, 700))
+	street.objective = h
+	await _snap("57_edge_arrow", 40)
+
+
+func _shot_walk() -> void:
+	await _ensure_started()
+	main.sim.encounters.catalog = []
+	# Wide sidewalks on the avenue and a cul-de-sac.
+	var spine_pos: Vector2 = street.spawn_point()
+	_teleport(spine_pos)
+	await _snap("60_sidewalk_avenue", 40)
+	# A sidewalk obstruction case, all five variants, one lot each.
+	var variants := ["hedge", "branch", "bins", "debris", "materials"]
+	var std: Array = []
+	for l in street.hood.lots:
+		if l.kind == "standard" and l.side != 0:
+			std.append(l)
+	var pins := {}
+	var visuals := {}
+	var def: Dictionary = main.sim.violations.get_def("sidewalk_obstruction")
+	for i in variants.size():
+		var item: Dictionary = main.sim.violations.make_allegation(def, 1.0, main.sim.rng, 1)
+		item.object = variants[i]
+		item.borderline = false
+		var h: int = std[i].id
+		main.sim.assignments[h] = {"kind": "card", "source": "resident", "complainant": "Resident", "violations": [item],
+				"false_complaint": false, "status": "assigned", "text": str(item.complaint)}
+		pins[h] = "card"
+		visuals[h] = [item]
+	street.set_day(pins, main._grass, 0, null, {}, visuals)
+	street.objective = int(std[0].id)
+	street.zoom_input.target = 1.6
+	for i in 3:
+		var l = std[i]
+		_teleport(l.sidewalk_spot + Vector2(0, 80).rotated(l.front.angle() - PI / 2.0) * 0.0)
+		main._visited[l.id] = true
+		await _snap("61_obstruction_%s" % variants[i], 50)
+	street.zoom_input.target = 1.0
+	# Camera framing the obstruction itself.
+	var l0 = std[0]
+	_teleport(l0.inspect_anchor())
+	street.objective = l0.id
+	await _snap("64_obstruction_reached", 40)
+	street.inspect_near()
+	await get_tree().process_frame
+	_press("TAKE PHOTO")
+	for zoom in [1.4, 1.8, 2.2]:
+		street.camera_ev.zoom = zoom
+		for i in 18:
+			await get_tree().process_frame
+		if bool(street.frame_info.get("potential", false)):
+			break
+	await _snap("65_obstruction_camera", 20)
+	print("WALK quality ", street.frame_info, " zoom ", street.camera_ev.zoom)
+
+
+func _shot_markers() -> void:
+	await _ensure_started()
+	main.sim.encounters.catalog = []
+	# One complaint and one reinspection side by side, selected and unselected.
+	var lots: Array = []
+	for l in street.hood.lots:
+		if l.kind == "standard" and l.side != 0:
+			lots.append(l)
+	var a: int = lots[0].id
+	var b: int = lots[1].id
+	street.pins[a] = "card"
+	street.pins[b] = "reinspect"
+	street.objective = a
+	street.zoom_input.target = 1.5
+	_teleport(lots[0].inspect_anchor() + (lots[1].inspect_anchor() - lots[0].inspect_anchor()) * 0.5)
+	await _snap("70_markers", 60)
+
+
+func _shot_sign() -> void:
+	await _ensure_started()
+	var painter = street.world_view.painter
+	for item in painter.furniture:
+		if str(item.type) == "name":
+			street.zoom_input.target = 1.7
+			_teleport(item.pos + Vector2(0, 40))
+			await _snap("71_street_sign", 60)
+			break

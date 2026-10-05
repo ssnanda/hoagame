@@ -44,6 +44,7 @@ static func button(text: String, size := 28, height := 76) -> Button:
 static func check(text: String, size := 24) -> CheckButton:
 	var c := CheckButton.new()
 	c.text = text
+	c.custom_minimum_size = Vector2(0, 56)      # comfortable touch row
 	c.add_theme_font_size_override("font_size", size)
 	for slot in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		c.add_theme_color_override(slot, INK)

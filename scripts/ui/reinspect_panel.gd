@@ -4,6 +4,7 @@ extends Panel
 const UiKit := preload("res://scripts/ui/ui_kit.gd")
 
 signal chose(choice: String)
+signal closed
 
 const RESULT_TEXT := {
 	"fixed": ["FIXED", "Everything checks out. The homeowner did the work."],
@@ -50,3 +51,6 @@ func _ready() -> void:
 			reasons.append(str(option.reason))
 	if not reasons.is_empty():
 		footer.add_child(UiKit.label("\n".join(reasons), 16, UiKit.BAD))
+	var back := UiKit.button("< BACK", 22, 64)
+	back.pressed.connect(func(): closed.emit())
+	footer.add_child(back)

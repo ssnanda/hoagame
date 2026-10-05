@@ -11,8 +11,8 @@ const Residents := preload("res://scripts/sim/residents.gd")
 
 const RARITY_WEIGHT := {"common": 60.0, "uncommon": 25.0, "rare": 8.0, "very_rare": 0.5}
 const BASE_CHANCE := 0.38       ## chance a ruling produces any encounter at all
-const TRIGGER_CHANCE := {"visit": 0.2}   ## approaches trigger less often than rulings
-const MIN_DAY := 2              ## day one stays a clean tutorial
+const TRIGGER_CHANCE := {"visit": 0.2, "photo": 0.14}   ## approaches trigger less often than rulings
+const SHOWCASE_ID := "showcase_first"   ## the scripted first encounter every new player sees
 
 var catalog: Array = []
 var last_seen: Dictionary = {}  ## id -> day it last played (persisted by the sim)
@@ -31,7 +31,13 @@ func load_data() -> void:
 
 ## `ctx`: {trigger, day, season, property, fairness_gap}. Returns {} when nothing plays.
 func pick(ctx: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
-	if catalog.is_empty() or int(ctx.get("day", 1)) < MIN_DAY:
+	if catalog.is_empty():
+		return {}
+	# The first real ruling always plays the polished showcase; random scenes wait until it has.
+	if not last_seen.has(SHOWCASE_ID):
+		for entry: Dictionary in catalog:
+			if str(entry.get("id", "")) == SHOWCASE_ID and str(ctx.get("trigger", "")) in (entry.get("trigger", []) as Array):
+				return entry.duplicate(true)
 		return {}
 	var chance: float = float(TRIGGER_CHANCE.get(str(ctx.get("trigger", "")), BASE_CHANCE))
 	var property: Dictionary = ctx.get("property", {})
@@ -62,6 +68,8 @@ func pick(ctx: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 
 
 func _eligible(entry: Dictionary, ctx: Dictionary) -> bool:
+	if bool(entry.get("showcase", false)):
+		return false      # only ever played through the scripted path
 	if not str(ctx.get("trigger", "")) in (entry.get("trigger", []) as Array):
 		return false
 	var cooldown := int(entry.get("cooldown_days", 3))
@@ -82,6 +90,12 @@ func _eligible(entry: Dictionary, ctx: Dictionary) -> bool:
 		return false
 	if when.has("season") and not int(ctx.get("season", 0)) in (when.season as Array):
 		return false
+	if when.has("cited_any"):
+		var hit := false
+		for id in ctx.get("cited", []):
+			hit = hit or str(id) in (when.cited_any as Array)
+		if not hit:
+			return false
 	if when.get("needs_favored", false) and str(ctx.get("favored", "")) == "":
 		return false
 	if when.has("min_unfair"):

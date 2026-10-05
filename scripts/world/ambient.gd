@@ -4,6 +4,7 @@ extends RefCounted
 
 const Neighborhood := preload("res://scripts/world/neighborhood.gd")
 const LotScript := preload("res://scripts/world/lot.gd")
+const LotSlots := preload("res://scripts/world/lot_slots.gd")
 
 const MOVER_CYCLE := 40.0
 const PARK_OFFSET := 22.0
@@ -16,6 +17,8 @@ var walkers: Array = []
 var traffic: Array = []
 var kids: Array = []
 var crews: Array = []
+var gag: Dictionary = {}     ## a passing street joke (a dog dashing across the road); never blocks the player
+var _gag_clock := 25.0
 var movers: Array = []       ## visitor cars that drive up a side street, park at a curb, then leave
 var gardeners: Array = []    ## residents tending their own front yards
 var talkers: Array = []      ## neighbor pairs chatting by a mailbox
@@ -57,7 +60,7 @@ func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: D
 	var crew_kind: String = {0: "mower", 1: "mower", 2: "blower", 3: "shovel"}[season]
 	if not weekend:
 		for k in 3:
-			crews.append({"lot": _rng.randi_range(0, hood.lots.size() - 1), "phase": _rng.randf_range(0.0, TAU), "kind": crew_kind})
+			crews.append({"lot": _crew_lot(), "phase": _rng.randf_range(0.0, TAU), "kind": crew_kind})
 	movers.clear()
 	var tries := 0
 	while movers.size() < (3 if outdoor > 0.3 else 1) and tries < 60:
@@ -77,7 +80,7 @@ func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: D
 	for k in roundi((3 if season != 3 else 1) * outdoor):
 		talkers.append({"lot": _rng.randi_range(0, hood.lots.size() - 1), "tone": k % 4})
 	if not weekend and season != 3 and outdoor > 0.5:
-		crews.append({"lot": _rng.randi_range(0, hood.lots.size() - 1), "phase": _rng.randf_range(0.0, TAU), "kind": "contractor"})
+		crews.append({"lot": _crew_lot(), "phase": _rng.randf_range(0.0, TAU), "kind": "contractor"})
 	kids.clear()
 	var bulbs: Array = []
 	for street in hood.streets:
@@ -87,6 +90,31 @@ func setup(neighborhood: Neighborhood, day: int, weekday: int, skip_driveways: D
 		kids.append({"c": bulbs[(k * 3) % bulbs.size()], "r": _rng.randf_range(34.0, 62.0),
 				"phase": _rng.randf_range(0.0, TAU), "speed": _rng.randf_range(0.8, 1.5), "tone": k % 4})
 	_rebuild_parked(day, skip_driveways)
+
+
+## A lot for a work crew whose truck will not cover any property's inspection point or mailbox.
+func _crew_lot() -> int:
+	var pick := 0
+	for _try in 40:
+		pick = _rng.randi_range(0, hood.lots.size() - 1)
+		var lot: LotScript = hood.lots[pick]
+		if lot.side == 0:
+			continue         # bulb lots curve away from a straight truck: keep crews on straight streets
+		var pose := crew_truck_pose({"lot": pick})
+		var entry := {"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": Vector2(50.0, 20.0)}
+		if _keeps_access_clear(entry):
+			return pick
+	return pick
+
+
+func _keeps_access_clear(entry: Dictionary) -> bool:
+	for other: LotScript in hood.lots:
+		if absf(other.center.y - (entry.pos as Vector2).y) > 260.0:
+			continue
+		for spot in [other.inspect_anchor(), other.mailbox]:
+			if LotSlots.entry_contains(entry, spot, 6.0):
+				return false
+	return true
 
 
 func _rebuild_parked(day: int, skip_driveways: Dictionary) -> void:
@@ -102,6 +130,7 @@ func _rebuild_parked(day: int, skip_driveways: Dictionary) -> void:
 
 func update(delta: float, player: Vector2) -> void:
 	time += delta
+	_update_gag(delta, player)
 	var spine = hood.streets[0]
 	for v in traffic:
 		if float(v.pause) > 0.0:
@@ -180,6 +209,30 @@ func mover_pose(m: Dictionary) -> Dictionary:
 	return {"pos": (smp[0] as Vector2) + n * (street.half - 14.0 if not moving else lane), "heading": heading, "visible": visible, "moving": moving}
 
 
+## Every so often a dog bolts across the road near the player. Pure ambience.
+func _update_gag(delta: float, player: Vector2) -> void:
+	if not gag.is_empty():
+		gag.t = float(gag.t) + delta
+		gag.fresh = false
+		if float(gag.t) > float(gag.dur):
+			gag = {}
+		return
+	_gag_clock -= delta
+	if _gag_clock > 0.0:
+		return
+	_gag_clock = _rng.randf_range(35.0, 70.0)
+	var dir := Vector2.from_angle(_rng.randf_range(-0.4, 0.4) + (0.0 if _rng.randf() < 0.5 else PI))
+	var start := player + Vector2(-dir.x * 260.0, -dir.y * 260.0 + _rng.randf_range(-140.0, 140.0))
+	gag = {"type": "dog_dash", "from": start, "to": start + dir * 520.0, "t": 0.0, "dur": 5.0, "fresh": true}
+
+
+func gag_pos() -> Vector2:
+	if gag.is_empty():
+		return Vector2.INF
+	var k := clampf(float(gag.t) / float(gag.dur), 0.0, 1.0)
+	return (gag.from as Vector2).lerp(gag.to as Vector2, k)
+
+
 func gardener_position(g: Dictionary) -> Vector2:
 	var lot: LotScript = hood.lots[int(g.lot)]
 	return lot.local_point(lot.house_size.x * 0.5 + 22.0, sin(time * 0.3 + float(g.phase)) * lot.house_size.y * 0.25)
@@ -225,17 +278,17 @@ func obstacles() -> Array:
 	for v in traffic:
 		var pose := traffic_pose(v)
 		var half := Vector2(40.0, 16.0) if v.kind == "car" else Vector2(52.0, 20.0)
-		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": half})
+		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": half, "src": "traffic"})
 	for entry in parked:
 		var pose := parked_pose(entry)
-		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": Vector2(36.0, 17.0)})
+		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": Vector2(36.0, 17.0), "src": "parked_%s_lot%d" % [str(entry.kind), int(entry.lot)]})
 	for m in movers:
 		var mp := mover_pose(m)
 		if bool(mp.visible):
-			result.append({"pos": mp.pos, "rot": (mp.heading as Vector2).angle(), "half": Vector2(40.0, 16.0)})
+			result.append({"pos": mp.pos, "rot": (mp.heading as Vector2).angle(), "half": Vector2(40.0, 16.0), "src": "visitor_lot%d" % int(m.lot)})
 	for crew in crews:
 		var pose := crew_truck_pose(crew)
-		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": Vector2(50.0, 20.0)})
+		result.append({"pos": pose.pos, "rot": (pose.heading as Vector2).angle(), "half": Vector2(50.0, 20.0), "src": "crew_lot%d" % int(crew.lot)})
 	return result
 
 

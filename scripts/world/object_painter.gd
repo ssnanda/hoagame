@@ -96,6 +96,8 @@ static func yard_object(c: CanvasItem, base: Transform2D, entry: Dictionary, pos
 			for k in 5:
 				DrawUtil.ellipse(c, Vector2(-40 + k * 20, sin(k * 2.0) * 6.0), 25.0, 21.0, Color("1f6b43").lightened(k * 0.04))
 				c.draw_circle(Vector2(-40 + k * 20, sin(k * 2.0) * 6.0 - 6.0), 9.0, Color("2f8a52"))
+		"sidewalk_obstruction":
+			_sidewalk_obstruction(c, str(entry.get("object", "hedge")))
 		"debris":
 			DrawUtil.rr(c, Rect2(-24, -20, 48, 40), Color("d9822b"), 3)
 			c.draw_rect(Rect2(-24, -20, 48, 40), Color("8a4f12"), false, 2.0)
@@ -103,6 +105,37 @@ static func yard_object(c: CanvasItem, base: Transform2D, entry: Dictionary, pos
 				c.draw_circle(Vector2(-14 + k * 9, -4 + (k % 2) * 8), 5.0, Color("6b5a4a"))
 			c.draw_line(Vector2(28, -10), Vector2(44, -4), Color("8a6747"), 5.0)
 	c.draw_set_transform_matrix(base)
+
+
+## What is in the way of the public sidewalk. +x runs along the walk, +y across it.
+static func _sidewalk_obstruction(c: CanvasItem, variant: String) -> void:
+	match variant:
+		"branch":
+			c.draw_line(Vector2(-34, 18), Vector2(0, -2), Color("6b4a35"), 6.0, true)
+			c.draw_line(Vector2(-8, 4), Vector2(30, -14), Color("6b4a35"), 4.0, true)
+			c.draw_line(Vector2(-14, 8), Vector2(22, 16), Color("6b4a35"), 3.0, true)
+			for k in 9:
+				DrawUtil.ellipse(c, Vector2(-20 + k * 7.0, -8.0 + sin(k * 1.9) * 12.0), 9.0, 7.0, Color("2f8a52").lightened(0.04 * (k % 3)))
+		"bins":
+			for k in 2:
+				DrawUtil.rr(c, Rect2(-24 + k * 26, -13, 20, 26), Color("3a6f4a") if k == 0 else Color("2f4858"), 4)
+				c.draw_rect(Rect2(-26 + k * 26, -15, 24, 5), Color("20252b"))
+		"debris":
+			DrawUtil.rr(c, Rect2(-28, -12, 56, 24), Color("a8825a"), 3)
+			for k in 3:
+				c.draw_line(Vector2(-26, -8 + k * 8), Vector2(26, -6 + k * 8), Color("6b4a35"), 2.0)
+			DrawUtil.ellipse(c, Vector2(30, 6), 9.0, 7.0, Color("20252b"))
+		"materials":
+			for row in 2:
+				for col in 4:
+					c.draw_rect(Rect2(-28 + col * 14, -12 + row * 12, 12, 10), Color("b9573a") if (row + col) % 2 == 0 else Color("a24a30"))
+			c.draw_rect(Rect2(-30, -14, 60, 28), Color("5a3a28"), false, 2.0)
+		_:
+			# Overgrown hedge spilling across the walk.
+			for k in 6:
+				DrawUtil.ellipse(c, Vector2(-30 + k * 12.0, sin(k * 2.0) * 4.0), 15.0, 14.0, Color("1f6b43").lightened(k * 0.03))
+			for k in 5:
+				c.draw_circle(Vector2(-26 + k * 12.0, -6.0 + sin(k * 1.7) * 6.0), 6.0, Color("3a9a5a"))
 
 
 static func _vehicle(c: CanvasItem, base: Transform2D, id: String, pos: Vector2, rot: float, s: float, dusk: float) -> void:

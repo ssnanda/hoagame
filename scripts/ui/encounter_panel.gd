@@ -79,9 +79,9 @@ func _ready() -> void:
 	_choices.position = Vector2(20.0, size.y * 0.70 + 130.0)
 	_choices.size = Vector2(size.x - 40.0, size.y * 0.30 - 150.0)
 	add_child(_choices)
-	var skip := UiKit.button("SKIP", 20, 48)
-	skip.position = Vector2(size.x - 128.0, 22.0)
-	skip.size = Vector2(108.0, 48.0)
+	var skip := UiKit.button("SKIP", 20, 56)
+	skip.position = Vector2(size.x - 140.0, 18.0)
+	skip.size = Vector2(120.0, 56.0)
 	skip.pressed.connect(_skip)
 	add_child(skip)
 	_show_line()
@@ -186,7 +186,7 @@ func _show_choices() -> void:
 	_scene_idx = (data.lines as Array).size()
 	_tap_hint.visible = false
 	for opt: Dictionary in data.choices:
-		var b := UiKit.button(_fill(str(opt.label)), 21, 50)
+		var b := UiKit.button(_fill(str(opt.label)), 21, 56)
 		b.pressed.connect(func():
 			Sfx.play("tap")
 			Settings.haptic(15)
@@ -242,7 +242,15 @@ func _draw() -> void:
 	var pose := str(data.get("pose", "idle"))
 	if tone == "slapstick" and _scene_idx >= 2:
 		pose = "yelling"
-	_figure(Vector2(s.size.x * 0.64, floor_y + 14.0), 2.4, pose, shirt, skin, tone)
+	# The resident walks out of the doorway to their spot, growing as they come forward.
+	var enter := clampf((_t - 0.45) / 0.9, 0.0, 1.0)
+	enter = enter * enter * (3.0 - 2.0 * enter)
+	var origin := _entrance_origin(s, floor_y)
+	var spot_x := lerpf(origin.x, s.size.x * 0.64, enter)
+	var spot_y := lerpf(origin.y, floor_y + 14.0, enter)
+	var from_side := str(data.get("entrance", "door")) == "side"
+	if _t > (0.3 if from_side else 0.5):
+		_figure(Vector2(spot_x, spot_y), lerpf(1.1 if from_side else 1.5, 2.4, enter), pose if enter > 0.85 else "idle", shirt, skin, tone)
 	_props_front(show_props, s, floor_y)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Letterbox bars with the address.
@@ -273,9 +281,27 @@ func _house(s: Rect2, floor_y: float) -> void:
 	draw_colored_polygon(PackedVector2Array([Vector2(x0 - 24.0, top + 44.0), Vector2(x0 + w * 0.5, top - 30.0), Vector2(x0 + w + 24.0, top + 44.0)]), roof_color)
 	# Door (opens at the first line) and windows.
 	var door := Rect2(x0 + w * 0.5 - 38.0, floor_y - 150.0, 76.0, 150.0)
-	DrawUtil.rr(self, door, Color("5a3a28"), 6)
-	draw_rect(Rect2(door.position + Vector2(8.0, 10.0), Vector2(60.0, 52.0)), Color("a8c9d6"))
-	draw_circle(door.position + Vector2(62.0, 86.0), 4.0, Color("e5c46a"))
+	var entrance := str(data.get("entrance", "door"))
+	var swing := clampf((_t - 0.15) / 0.45, 0.0, 1.0) if entrance == "door" else 0.0   # the front door opens in the first half second
+	if entrance == "garage":
+		# Garage door rolls up, revealing a dark bay, while the resident steps out of it.
+		var g := _garage_rect(s, floor_y)
+		var rise := clampf((_t - 0.15) / 0.6, 0.0, 1.0)
+		DrawUtil.rr(self, g, Color("1d1a1c"), 4)
+		var panel_h := g.size.y * (1.0 - rise)
+		DrawUtil.rr(self, Rect2(g.position, Vector2(g.size.x, panel_h)), Color("c9cdd2"), 4)
+		for k in range(1, 5):
+			if k * 24.0 < panel_h:
+				draw_line(g.position + Vector2(0, k * 24.0), g.position + Vector2(g.size.x, k * 24.0), Color(0, 0, 0, 0.2), 2.0)
+	if swing > 0.0:
+		DrawUtil.rr(self, door, Color("1d1a1c"), 6)         # dark doorway
+		draw_rect(Rect2(door.position + Vector2(6.0, 0.0), Vector2(64.0, 150.0)), Color("34262a"))
+		var leaf := 76.0 * (1.0 - swing * 0.82)
+		draw_colored_polygon(PackedVector2Array([door.position, door.position + Vector2(leaf, 8.0 * swing), door.position + Vector2(leaf, 150.0 - 8.0 * swing), door.position + Vector2(0, 150.0)]), Color("5a3a28"))
+	else:
+		DrawUtil.rr(self, door, Color("5a3a28"), 6)
+		draw_rect(Rect2(door.position + Vector2(8.0, 10.0), Vector2(60.0, 52.0)), Color("a8c9d6"))
+		draw_circle(door.position + Vector2(62.0, 86.0), 4.0, Color("e5c46a"))
 	for wx in [x0 + 36.0, x0 + w - 36.0 - 76.0]:
 		var win := Rect2(wx, floor_y - 140.0, 76.0, 70.0)
 		draw_rect(win, Color("a8c9d6"))
@@ -287,6 +313,21 @@ func _house(s: Rect2, floor_y: float) -> void:
 	# Hedge and mailbox for depth.
 	for k in 6:
 		DrawUtil.ellipse(self, Vector2(x0 + 10.0 + k * 38.0, floor_y - 6.0), 24.0, 18.0, Color("3d7f45"))
+
+
+func _garage_rect(s: Rect2, floor_y: float) -> Rect2:
+	return Rect2(s.position.x + s.size.x * 0.05 + 24.0, floor_y - 118.0, 150.0, 118.0)
+
+
+## Where the resident starts walking from, by entrance type: front door, open garage, or the side yard.
+func _entrance_origin(s: Rect2, floor_y: float) -> Vector2:
+	match str(data.get("entrance", "door")):
+		"garage":
+			var g := _garage_rect(s, floor_y)
+			return Vector2(g.get_center().x, floor_y - 6.0)
+		"side":
+			return Vector2(s.size.x + 80.0, floor_y + 10.0)
+	return Vector2(s.size.x * 0.5, floor_y - 6.0)
 
 
 func _figure(feet: Vector2, k: float, pose: String, shirt_c: Color, skin_c: Color, tone: String) -> void:
@@ -494,13 +535,21 @@ func _props_front(props: Array, s: Rect2, floor_y: float) -> void:
 		draw_circle(Vector2(46.0, -2.0), 12.0, Color("20252b"))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if "sprinkler" in props:
-		for ox in [s.size.x * 0.12, s.size.x * 0.3, s.size.x * 0.44]:
-			var origin := Vector2(ox, floor_y + 52.0)
-			draw_rect(Rect2(origin + Vector2(-5.0, -4.0), Vector2(10.0, 8.0)), Color("3a3f45"))
-			for j in 12:
-				var u := fposmod(_t * 1.6 + j * 0.083, 1.0)
-				var p := origin + Vector2((u - 0.5) * 90.0 * (1.0 if int(ox) % 2 == 0 else -1.0), -sin(u * PI) * 74.0)
-				draw_circle(p, 3.0, Color(0.55, 0.8, 1.0, 0.85))
+		# Heads on the lawn strip; the jets arc up and across toward the inspector.
+		for k in 3:
+			var ox: float = s.size.x * (0.1 + k * 0.17)
+			var origin := Vector2(ox, floor_y + 24.0)
+			draw_rect(Rect2(origin + Vector2(-6.0, -4.0), Vector2(12.0, 8.0)), Color("3a3f45"))
+			for j in 16:
+				var u := fposmod(_t * 1.5 + j * 0.0625 + k * 0.2, 1.0)
+				var reach := (s.size.x * 0.2 - ox) * 0.9 + 60.0 * (1.0 if k == 0 else -1.0)
+				var p := origin + Vector2(u * reach, -sin(u * PI) * 150.0)
+				draw_circle(p, 3.5, Color(0.55, 0.8, 1.0, 0.9))
+		# The inspector is soaked: a cool wash and drips.
+		var wet := Vector2(s.size.x * 0.2, floor_y - 40.0)
+		draw_circle(wet, 52.0, Color(0.45, 0.7, 1.0, 0.16 + 0.06 * sin(_t * 8.0)))
+		for j in 6:
+			draw_circle(wet + Vector2(sin(j * 2.3 + _t) * 26.0, fposmod(_t * 90.0 + j * 17.0, 70.0) - 20.0), 2.5, Color(0.7, 0.88, 1.0, 0.9))
 	if "dog" in props:
 		var run := fposmod(_t * 0.5, 1.4) - 0.2
 		var dp := Vector2(lerpf(-60.0, s.size.x + 40.0, run), floor_y + 66.0 + sin(_t * 14.0) * 4.0)

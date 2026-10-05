@@ -108,7 +108,7 @@ static func settings(host_size: Vector2, on_close: Callable, on_reset: Callable)
 		vol.max_value = 1.0
 		vol.step = 0.05
 		vol.value = float(Settings.get(str(item[1])))
-		vol.custom_minimum_size = Vector2(0, 44)
+		vol.custom_minimum_size = Vector2(0, 56)
 		vol.value_changed.connect(func(v):
 			Settings.set(str(item[1]), v)
 			Settings.save()
@@ -120,7 +120,7 @@ static func settings(host_size: Vector2, on_close: Callable, on_reset: Callable)
 	text_slider.max_value = 1.3
 	text_slider.step = 0.05
 	text_slider.value = Settings.text_scale
-	text_slider.custom_minimum_size = Vector2(0, 44)
+	text_slider.custom_minimum_size = Vector2(0, 56)
 	text_slider.value_changed.connect(func(v):
 		Settings.text_scale = v
 		Settings.save())
@@ -131,7 +131,7 @@ static func settings(host_size: Vector2, on_close: Callable, on_reset: Callable)
 	slider.max_value = 1.6
 	slider.step = 0.1
 	slider.value = Settings.sensitivity
-	slider.custom_minimum_size = Vector2(0, 48)
+	slider.custom_minimum_size = Vector2(0, 56)
 	slider.value_changed.connect(func(v):
 		Settings.sensitivity = v
 		Settings.save())

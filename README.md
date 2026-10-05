@@ -76,6 +76,11 @@ godot --headless --path . --script res://tools/validate_world.gd -- seeds=25   #
 # Visual + input QA need a real renderer; an off-screen window works (nothing appears on your screen):
 godot --path . --position 6000,6000 --resolution 540x960 res://tools/shots.tscn -- out=/some/dir [shots=street,encounters,menus,maps,flow,life]
 godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_input.tscn   # drag release, tap, pinch
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_flow.tscn    # card -> camera -> preview -> case; stuck-state + modal-leak checks
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_cinematic.tscn -- out=/dir  # fresh game -> scripted first case -> showcase encounter
+godot --headless --path . --script res://tools/qa_walk.gd          # sidewalk assist, front-lawn cutting, reachability
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_touch.tscn      # touch-target audit of the real UI
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_interrupt.tscn  # focus loss / pause / resume during card, camera, cinematic
 godot --headless --path . res://tools/smoke_test.tscn -- bot=smart seed=7       # reproducible session (seed=N)
 godot --headless --path . res://tools/smoke_test.tscn -- bot=smart # plays whole terms; bot=random|smart|fine_all|dismiss_all
 ```
