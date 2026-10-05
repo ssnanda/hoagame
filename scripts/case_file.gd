@@ -45,6 +45,8 @@ func _ready() -> void:
 	box.add_child(UiKit.section("PROPERTY"))
 	box.add_child(UiKit.label(str(data.get("address", "")), 30, UiKit.INK))
 	box.add_child(UiKit.label("%s · %s" % [str(data.get("owner", "")), str(data.get("relationship", "Neutral"))], 22, UiKit.ACCENT))
+	if str(data.get("next", "")) != "":
+		box.add_child(UiKit.label("NEXT: %s" % str(data.next), 18, UiKit.GOOD))
 	var tags: Array = []
 	if int(data.get("repeat_count", 0)) > 0:
 		tags.append("REPEAT OFFENDER x%d" % int(data.repeat_count))

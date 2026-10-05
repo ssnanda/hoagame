@@ -1,0 +1,244 @@
+[
+  {
+    "id": "fine_critic",
+    "priority": "enforcement",
+    "target": "critic",
+    "min_day": 3,
+    "text": "{who}: \"{owner} at {address} has been a thorn for months. Fine them on the next thing you find. Anything.\"",
+    "choices": [
+      {
+        "label": "Agree to look closely",
+        "effects": {
+          "board_member": 6,
+          "legal": 5,
+          "relationship": -8,
+          "record": "press"
+        },
+        "result": "Walt is pleased. {owner} will notice the extra attention."
+      },
+      {
+        "label": "Decline: same rules for all",
+        "effects": {
+          "board_member": -4,
+          "legal": -2,
+          "relationship": 2
+        },
+        "result": "Walt mutters something about 'weak leadership'."
+      }
+    ]
+  },
+  {
+    "id": "overlook_friend",
+    "priority": "tradition",
+    "target": "friend",
+    "min_day": 3,
+    "text": "{who}: \"{owner} at {address} is a good neighbor. If a notice crosses your desk, let it slide. Quietly.\"",
+    "choices": [
+      {
+        "label": "Quietly agree",
+        "effects": {
+          "board_member": 7,
+          "legal": 6,
+          "relationship": 8,
+          "record": "overlook"
+        },
+        "result": "Easy now. Someone is keeping a list of favors, and it isn't Ben."
+      },
+      {
+        "label": "Decline politely",
+        "effects": {
+          "board_member": -5,
+          "legal": -2,
+          "relationship": -2
+        },
+        "result": "Ben says he understands. His tone says otherwise."
+      }
+    ]
+  },
+  {
+    "id": "budget_cut",
+    "priority": "budget",
+    "target": "any",
+    "min_day": 4,
+    "text": "{who}: \"The reserve fund is thin. Skip the landscaper's invoice this month and call it a 'review'.\"",
+    "choices": [
+      {
+        "label": "Delay the payment",
+        "effects": {
+          "board_member": 5,
+          "budget": 4,
+          "happiness": -3
+        },
+        "result": "The treasury looks better. The lawn crew looks angrier."
+      },
+      {
+        "label": "Pay on time",
+        "effects": {
+          "board_member": -3,
+          "budget": -2
+        },
+        "result": "Pat writes the amount down twice."
+      }
+    ]
+  },
+  {
+    "id": "legal_warning",
+    "priority": "legal",
+    "target": "open_case",
+    "min_day": 4,
+    "text": "{who}: \"Disclaimer, disclaimer. The file on {address} has gaps. Please re-document before anyone says 'lawyer'.\"",
+    "choices": [
+      {
+        "label": "Re-document the case",
+        "effects": {
+          "board_member": 4,
+          "legal": -6,
+          "power": -1
+        },
+        "result": "Dana nods once. High praise."
+      },
+      {
+        "label": "Brush it off",
+        "effects": {
+          "board_member": -4,
+          "legal": 6
+        },
+        "result": "Dana adds a footnote to your file."
+      }
+    ]
+  },
+  {
+    "id": "potluck",
+    "priority": "happiness",
+    "target": "any",
+    "min_day": 3,
+    "text": "{who}: \"Let's skip the next fine and hold a neighborhood potluck at {address}. Everyone's invited!\"",
+    "choices": [
+      {
+        "label": "Host the potluck",
+        "effects": {
+          "board_member": 6,
+          "happiness": 6,
+          "budget": -3,
+          "relationship": 8
+        },
+        "result": "Seven casseroles. One argument about the casseroles."
+      },
+      {
+        "label": "Politely pass",
+        "effects": {
+          "board_member": -3,
+          "power": 1
+        },
+        "result": "Lorraine promises to ask again."
+      }
+    ]
+  },
+  {
+    "id": "campaign",
+    "priority": "tradition",
+    "target": "any",
+    "min_day": 6,
+    "text": "{who}: \"I'm thinking about running for president next year. Unless you'd like to... reconsider your approach to {address}.\"",
+    "choices": [
+      {
+        "label": "Hold my ground",
+        "effects": {
+          "board_member": -6,
+          "legal": -1,
+          "power": 1
+        },
+        "result": "Ben starts attending meetings with a clipboard of his own."
+      },
+      {
+        "label": "Offer him a committee",
+        "effects": {
+          "board_member": 5,
+          "power": -2
+        },
+        "result": "A subcommittee is born. It meets monthly. Nobody knows why."
+      }
+    ]
+  },
+  {
+    "id": "procedural",
+    "priority": "legal",
+    "target": "open_case",
+    "min_day": 6,
+    "text": "{who}: \"The notice for {address} skipped a required step. I'm not saying it's a problem. I'm saying I'm writing it down.\"",
+    "choices": [
+      {
+        "label": "Fix the process",
+        "effects": {
+          "board_member": 5,
+          "legal": -5,
+          "power": -1
+        },
+        "result": "Dana crosses something out, looks almost relieved."
+      },
+      {
+        "label": "Defend the notice",
+        "effects": {
+          "board_member": -5,
+          "legal": 6
+        },
+        "result": "The footnote grows a second footnote."
+      }
+    ]
+  },
+  {
+    "id": "leak",
+    "priority": "happiness",
+    "target": "any",
+    "min_day": 5,
+    "text": "{who}: \"Someone leaked the file on {address} to the neighborhood group. It wasn't me. I only know because I read it.\"",
+    "choices": [
+      {
+        "label": "Investigate the leak",
+        "effects": {
+          "board_member": 3,
+          "legal": -2,
+          "happiness": -1
+        },
+        "result": "Everyone is a suspect. The potluck is awkward."
+      },
+      {
+        "label": "Let it go",
+        "effects": {
+          "board_member": -2,
+          "happiness": 2,
+          "legal": 2
+        },
+        "result": "The file gets a dozen thumbs-up emojis."
+      }
+    ]
+  },
+  {
+    "id": "vendor_replace",
+    "priority": "budget",
+    "target": "any",
+    "min_day": 5,
+    "text": "{who}: \"The landscaper is overpriced. I found a cousin's company. It's cheaper. It also doesn't have a truck.\"",
+    "choices": [
+      {
+        "label": "Switch vendors",
+        "effects": {
+          "board_member": 5,
+          "budget": 3,
+          "happiness": -3
+        },
+        "result": "The new crew arrives by bicycle. It's a start.",
+        "vendor": {
+          "landscaper": -1
+        }
+      },
+      {
+        "label": "Keep the current vendor",
+        "effects": {
+          "board_member": -3
+        },
+        "result": "Pat sighs, in decimals."
+      }
+    ]
+  }
+]

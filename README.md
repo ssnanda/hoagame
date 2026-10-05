@@ -30,6 +30,26 @@ Complaint → travel → observe → investigate → photograph → decide → c
 - **Seasons.** Spring tulips and rain, summer sprinklers and pool swimmers, fall leaf piles
   and leaf blowers, winter snow caps and holiday lights. Violations follow the calendar
   (no tall grass under snow).
+- **Cinematic encounters.** After a ruling the camera pushes in on the front door and a
+  letterboxed close-up plays: the resident comes out, you pick a concise reply, and the
+  outcome (relationship, legal risk, board support, a temporary slowdown) applies once.
+  Scenes are data in `data/encounters.json` (trigger, rarity, cooldown, trait/season
+  filters, props, lines, choices); adding one needs no code. Common scenes are everyday
+  explanations; the very rare slapstick one is cartoon-only and non-graphic.
+- **Board pressure.** Directors phone with requests (fine a critic, overlook a friend, delay a
+  vendor). Compliance is tempting and is tracked by the selective-enforcement ledger.
+  Three angry directors plus legal exposure can trigger a recall petition and an emergency vote.
+  Calls live in `data/board_calls.json`.
+- **ARC memory.** Approving an architectural request is remembered; days later the committee
+  reports what was actually built and you inspect the work against the approval.
+- **Weather and calendar.** Deterministic daily weather (sunny, cloudy, rain, thunderstorms,
+  wind, fog, heat, snow) changes the sky, ambience, crowds and photo quality. A game day stands
+  for about a week of calendar time; each morning opens with a short brief.
+- **Career.** Surviving three annual meetings completes a term, rates your governance and
+  unlocks the next of six communities (`data/communities.json`, modifiers only for now), with
+  achievements in `data/achievements.json`. Stored in `user://career.cfg`.
+- **Zoom.** Pinch (or mouse wheel / trackpad) zooms the neighborhood; RESET ZOOM appears
+  when you are off the default.
 - **Wozig portal.** Overview with enforcement balance by group, cases, board, finance
   ledger, violation history, resident directory, work orders and agenda decisions.
 - **Audio.** Procedural sounds and ambience layers (traffic, cart, leaf blower, sprinklers,
@@ -50,11 +70,27 @@ Developer tools (run in a throwaway copy of the project; the smoke test writes t
 
 ```bash
 godot --headless --path . --script res://tools/validate_world.gd   # layout validation
+godot --headless --path . --script res://tools/encounter_test.gd   # encounter catalog + rarity sampling
+godot --headless --path . res://tools/qa_encounters.tscn            # every scene x every choice plays cleanly, finishes once
+godot --headless --path . --script res://tools/validate_world.gd -- seeds=25   # layout sweep across seeds
+# Visual + input QA need a real renderer; an off-screen window works (nothing appears on your screen):
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/shots.tscn -- out=/some/dir [shots=street,encounters,menus,maps,flow,life]
+godot --path . --position 6000,6000 --resolution 540x960 res://tools/qa_input.tscn   # drag release, tap, pinch
+godot --headless --path . res://tools/smoke_test.tscn -- bot=smart seed=7       # reproducible session (seed=N)
 godot --headless --path . res://tools/smoke_test.tscn -- bot=smart # plays whole terms; bot=random|smart|fine_all|dismiss_all
 ```
 
 In a debug build, MENU → DEBUG VIEW overlays lot polygons, house footprints, driveways, the
 inspection radius, violation slots and property ids. World validation prints at startup.
+
+## QA checklist (sections 91-96)
+
+Automated: `validate_world` (overlaps, driveways, mailboxes, facing, reachability, slots, seeds),
+`qa_encounters` (start, all lines, every choice, outcome applied once), `smoke_test` bots
+(`smart|random|fine_all|dismiss_all`) for cases, reinspections, hearings, elections.
+By hand on a device: pinch zoom and drag release, cul-de-sacs, narrow sidewalks, golf cart
+bumps, evidence camera on wrong/partial/duplicate framing, a full warning -> cure ->
+reinspection -> hearing loop, a recall, a term completion, and a save/quit/resume cycle.
 
 ## Performance model
 
@@ -94,6 +130,9 @@ scripts/
     debug_overlay.gd   geometry debug drawing
   sim/
     hoa_sim.gd         rules: assignments, rulings, cure/reinspection/hearing/fine, discovery
+    encounters.gd      cinematic encounter picker and outcomes (data/encounters.json)
+    weather.gd         deterministic daily weather and its modifiers
+    career.gd          communities, unlocks, achievements (user://career.cfg)
     violations.gd      data-driven catalog + complaint generation (data/violations.json)
     residents.gd       households: traits, relationship score, memory
     board.gd           board characters, votes, election, legal risk, selective enforcement

@@ -1,0 +1,10 @@
+[
+  {"id": "not_on_my_lawn", "name": "Not On My Lawn", "desc": "Fine a homeowner for tall grass."},
+  {"id": "first_fine", "name": "First Fine", "desc": "Issue your first fine."},
+  {"id": "due_process", "name": "Due Process", "desc": "Close a case that went warning, reinspection, and resolution."},
+  {"id": "paparazzi", "name": "Neighborhood Paparazzi", "desc": "Take 25 evidence photos."},
+  {"id": "everyone_hates_me", "name": "Everyone Hates Me", "desc": "Let community happiness fall to 10 or lower."},
+  {"id": "unanimous_ish", "name": "Unanimous-ish", "desc": "Win a hearing vote that split 3 to 2."},
+  {"id": "term_complete", "name": "Survivor", "desc": "Complete a full term as HOA President."},
+  {"id": "slapstick", "name": "What Just Happened?", "desc": "Witness the rarest close-up of all."}
+]

@@ -9,6 +9,8 @@ signal evidence_changed
 signal discover(house: int)
 
 const Neighborhood := preload("res://scripts/world/neighborhood.gd")
+const CameraInput := preload("res://scripts/world/camera_input.gd")
+const Weather := preload("res://scripts/sim/weather.gd")
 const LotScript := preload("res://scripts/world/lot.gd")
 const LotSlots := preload("res://scripts/world/lot_slots.gd")
 const PlayerController := preload("res://scripts/world/player_controller.gd")
@@ -45,6 +47,7 @@ const QUIPS := [
 ]
 
 var hood: Neighborhood
+var world_seed := 7771       ## set by main before the node enters the tree (community layout)
 var player: PlayerController
 var ambient: Ambient
 var camera_ev: EvidenceCamera
@@ -82,6 +85,7 @@ var cart_heading := 0.0
 var cart_fx := 0.0           ## 1 -> 0 after getting in or out of the cart
 var _cart_slide := 0.0
 var debug_view := false
+var debug_labels: Dictionary = {}   ## lot id -> dev text (resident, traits, case state), filled by main in debug view
 var warm_up := false         ## true while a panel covers the street: redraw cached chunks faster
 var perf := {"process": 0.0, "world": 0.0, "hud": 0.0}   ## smoothed microseconds per frame (dev telemetry)
 var debug_scale := 0.0       ## dev tools: force the world zoom
@@ -94,6 +98,10 @@ var finger := Vector2.ZERO
 var stick := Vector2.ZERO
 var stick_hold := 0.0
 
+var cine_house := -1         ## >=0: camera pushes in on this property for a close-up encounter
+var slow_t := 0.0            ## seconds of reduced walking speed left
+var user_zoom := 1.0         ## pinch multiplier on top of the automatic walking zoom
+var zoom_input := CameraInput.new()
 var _pressing := false
 var _press_pos := Vector2.ZERO
 var _press_ms := 0
@@ -105,6 +113,10 @@ var _objective_check := 0.0
 var _cam_ready := false
 var _step_clock := 0.0
 var _audio_clock := 0.0
+var _thunder_played := false
+var _bump_cd := 0.0
+var _street_clock := 0.0
+var _player_street := -1
 var _bird_clock := 4.0
 var _bark_clock := 3.0
 
@@ -112,7 +124,7 @@ var _bark_clock := 3.0
 func _ready() -> void:
 	clip_contents = true
 	hood = Neighborhood.new()
-	hood.build()
+	hood.build(world_seed)
 	player = PlayerController.new()
 	player.position = _default_spawn()
 	cart_pos = player.position + Vector2(-40.0, 30.0)
@@ -174,8 +186,8 @@ func set_day(new_pins: Dictionary, new_grass: Array, completed := 0, saved_posit
 	_day_total = maxi(pins.size(), 1)
 	_day_done = int(completed)
 	walker_variant = (GameState.day - 1) % 4
-	weather = (GameState.day - 1) % 3
 	season = GameState.season()
+	weather = Weather.for_day(GameState.day, season)
 	layouts.clear()
 	_static_obstacles.clear()
 	var blocked_driveways := {}
@@ -190,7 +202,7 @@ func set_day(new_pins: Dictionary, new_grass: Array, completed := 0, saved_posit
 				_static_obstacles.append(entry)
 			if entry.id in ["rv", "commercial_vehicle", "broken_vehicle", "hoop"]:
 				blocked_driveways[id] = true
-	ambient.setup(hood, GameState.day, GameState.weekday(), blocked_driveways, season)
+	ambient.setup(hood, GameState.day, GameState.weekday(), blocked_driveways, season, Weather.outdoor_factor(weather))
 	world_view.invalidate()
 	if saved_position is Vector2 and hood.is_walkable(saved_position):
 		player.position = saved_position
@@ -253,6 +265,21 @@ func set_objective(house: int) -> void:
 	objective = house
 
 
+## Tapping the "Next" chip hops to the next open assignment, nearest first.
+func cycle_objective() -> void:
+	var open: Array = []
+	for house in pins:
+		if pins[house] in ACTIVE_KINDS:
+			open.append(int(house))
+	if open.is_empty():
+		return
+	open.sort_custom(func(a, b): return player.position.distance_to(hood.lots[a].driveway_mid()) < player.position.distance_to(hood.lots[b].driveway_mid()))
+	var at := open.find(objective)
+	objective = open[(at + 1) % open.size()]
+	photo_message = "WAYPOINT · %s" % lot_address(objective)
+	photo_message_t = 2.0
+
+
 func _pick_objective() -> void:
 	if objective >= 0 and pins.get(objective, "") in ACTIVE_KINDS:
 		return
@@ -302,6 +329,8 @@ func _gui_input(event: InputEvent) -> void:
 		if hud_view.map_open:
 			hud_view.handle_drag(event.relative)
 			return
+		if zoom_input.pinch_active():
+			return
 		if not dragging and event.position.distance_to(_press_pos) >= TAP_SLOP and not _overlay_open():
 			dragging = true
 			anchor = _press_pos
@@ -311,8 +340,40 @@ func _gui_input(event: InputEvent) -> void:
 			stick = (finger - anchor).limit_length(STICK_RANGE / Settings.sensitivity) / (STICK_RANGE / Settings.sensitivity)
 
 
+## Zoom gestures live in CameraInput; this only gates when they apply and cancels the
+## walk gesture when a pinch starts. Panels and the evidence camera keep their own input.
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or warm_up or _overlay_open():
+		zoom_input.clear()
+		return
+	if zoom_input.handle(event, get_global_rect().has_point(get_global_mouse_position())):
+		_pressing = false
+		dragging = false
+		stick = Vector2.ZERO
+
+
+func reset_zoom() -> void:
+	zoom_input.reset()
+
+
 func _overlay_open() -> bool:
-	return hud_view.map_open or hud_view.gallery_open or camera_ev.active
+	return hud_view.map_open or hud_view.gallery_open or camera_ev.active or cine_house >= 0
+
+
+## Camera push-in toward the front door; `end_cinematic` eases back to normal play.
+func begin_cinematic(house: int) -> void:
+	cine_house = house
+	dragging = false
+	stick = Vector2.ZERO
+
+
+func end_cinematic() -> void:
+	cine_house = -1
+
+
+## A comic mishap: slower walking for a while.
+func apply_slow(seconds: float) -> void:
+	slow_t = maxf(slow_t, seconds)
 
 
 func _tap(pos: Vector2) -> void:
@@ -406,8 +467,20 @@ func _process(delta: float) -> void:
 	if _cart_slide > 0.0:
 		_cart_slide -= delta
 		player.position = player.position.lerp(cart_pos, 1.0 - exp(-16.0 * delta))
+	slow_t = maxf(0.0, slow_t - delta)
+	player.speed_mult = 0.6 if slow_t > 0.0 else 1.0
 	ambient.update(delta, player.position)
+	var before := player.position
 	player.update(delta, move, hood, _nearby_obstacles(), ambient.circles())
+	# Collision feedback: pushing the cart into something gives a thump and a tap of haptics.
+	_bump_cd = maxf(0.0, _bump_cd - delta)
+	if player.cart and move.length() > 0.5 and player.velocity.length() > 80.0 and _bump_cd <= 0.0 \
+			and player.position.distance_to(before) < player.velocity.length() * delta * 0.25:
+		_bump_cd = 0.8
+		Sfx.play("door")
+		Settings.haptic(30)
+		bubble = "Bump!"
+		bubble_t = 0.6
 	player.smooth_heading(delta)
 	if player.moving and not player.cart:
 		_step_clock += delta * player.speed_fraction()
@@ -445,6 +518,8 @@ func _update_audio(delta: float) -> void:
 		var blower := 0.0
 		if season == 2:
 			for crew in ambient.crews:
+				if str(crew.get("kind", "")) != "blower":
+					continue
 				blower = maxf(blower, 1.0 - p.distance_to(ambient.crew_worker_position(crew)) / 450.0)
 		Sfx.set_loop("blower", blower)
 		var spray := 0.0
@@ -453,6 +528,15 @@ func _update_audio(delta: float) -> void:
 				if lot.id % 4 == 0 and absf(lot.center.y - p.y) < 340.0:
 					spray = maxf(spray, 1.0 - p.distance_to(lot.center) / 320.0)
 		Sfx.set_loop("sprinkler", spray)
+		Sfx.set_loop("rain", 0.9 if weather in [Weather.RAIN, Weather.STORM] else 0.0)
+		Sfx.set_loop("wind", 0.8 if weather == Weather.WIND else (0.35 if season >= 2 else 0.0))
+		if weather == Weather.STORM and fposmod(time, 11.0) < 0.3:
+			if not _thunder_played:
+				_thunder_played = true
+				Sfx.play("thunder")
+				Settings.haptic(20)
+		elif fposmod(time, 11.0) > 1.0:
+			_thunder_played = false
 	if _bird_clock <= 0.0:
 		_bird_clock = randf_range(3.0, 9.0)
 		if season <= 1 and dusk < 0.5:
@@ -485,7 +569,7 @@ func _nearby_obstacles() -> Array:
 
 
 func _follow_camera(delta: float) -> void:
-	var target_scale := 0.9 if player.moving else 1.0
+	var target_scale := 0.9 if (player.moving and Settings.zoom_out_walking) else 1.0
 	if player.cart and player.moving:
 		target_scale = 0.84
 	target_scale -= 0.05 * cart_fx
@@ -493,15 +577,23 @@ func _follow_camera(delta: float) -> void:
 		target_scale = debug_scale
 	if Settings.reduce_motion:
 		target_scale = 1.0
+	if cine_house >= 0 and not Settings.reduce_motion:
+		target_scale = 1.9
+	user_zoom = lerpf(user_zoom, zoom_input.target, 1.0 - exp(-10.0 * delta))
 	if camera_ev.active:
 		target_scale = camera_ev.zoom
+	elif cine_house < 0:
+		target_scale *= user_zoom
 	world_scale = lerpf(world_scale, target_scale, 1.0 - exp(-5.0 * delta))
 	var look := Vector2.ZERO if Settings.reduce_motion else (player.velocity * 0.22).limit_length(70.0)
 	var focus := player.position + look
 	var target := Vector2(focus.x - size.x * 0.5, focus.y - size.y * 0.58)
 	if debug_focus != Vector2.INF:
 		target = debug_focus - size * 0.5
-	if camera_ev.active and near >= 0:
+	if cine_house >= 0:
+		var door: Vector2 = hood.lots[cine_house].local_point(hood.lots[cine_house].house_size.x * 0.5, 0.0)
+		target = door - Vector2(size.x * 0.5, size.y * 0.5)
+	elif camera_ev.active and near >= 0:
 		# Photographing: center the property in the viewfinder.
 		var frame := camera_ev.frame_rect(size)
 		target = hood.lots[near].center - Vector2(size.x * 0.5, frame.get_center().y)
@@ -520,10 +612,17 @@ func _follow_camera(delta: float) -> void:
 func _nearest_lot() -> int:
 	var best_score := NEAR_DIST
 	var found := -1
+	# Which street the inspector is on: a house across an unrelated road never steals the prompt.
+	_street_clock -= get_process_delta_time()
+	if _street_clock <= 0.0:
+		_street_clock = 0.2
+		_player_street = hood.street_at(player.position)
 	for lot: LotScript in hood.lots:
 		if absf(lot.center.y - player.position.y) > NEAR_DIST + 120.0:
 			continue
 		var d := player.position.distance_to(lot.driveway_mid())
+		if lot.street_id != _player_street and d > 70.0:
+			continue
 		var active: bool = pins.get(lot.id, "") in ACTIVE_KINDS
 		var score := d - (DRIVEWAY_BIAS if active else 0.0)
 		if d < NEAR_DIST and score < best_score:
@@ -554,7 +653,12 @@ func _evaluate_frame() -> Dictionary:
 	if near < 0:
 		return {"quality": 0, "documented": [], "potential": false}
 	var lot: LotScript = hood.lots[near]
-	return camera_ev.evaluate(lot, player.position, to_screen, size, dusk, layouts.get(near, []), _obstructors(lot))
+	var info := camera_ev.evaluate(lot, player.position, to_screen, size, dusk, layouts.get(near, []), _obstructors(lot))
+	# Rain, fog and storms cost photo quality; the meter shows it so the player can wait or move closer.
+	var penalty := Weather.photo_penalty(weather)
+	if penalty > 0 and int(info.get("quality", 0)) > 0:
+		info.quality = maxi(0, int(info.quality) - penalty)
+	return info
 
 
 func _obstructors(lot: LotScript) -> Array:

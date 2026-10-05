@@ -183,3 +183,28 @@ func election(state: Dictionary, power: int, rng: RandomNumberGenerator) -> Arra
 			line = "The legal exposure is my concern." if not yes else "Cautiously, yes."
 		votes.append({"index": i, "name": role.name, "role": role.role, "yes": yes, "line": line})
 	return votes
+
+
+## Fuzzy read on the next election. Deliberately imprecise: a day-seeded wobble keeps the
+## player guessing, and it blends fairness, mood, treasury, legal trouble and board support.
+func outlook(state: Dictionary, stats: Dictionary, day: int) -> String:
+	var score := float(support_average(state)) + (int(stats.get("power", 50)) - 50) * 0.3 \
+			+ (int(stats.get("happiness", 50)) - 50) * 0.25 + (int(stats.get("budget", 50)) - 50) * 0.08 \
+			- float(state.get("legal", 0)) * 0.15 - fairness_gap(state) * 20.0
+	score += sin(float(day) * 12.9898) * 7.0
+	if score >= 62.0:
+		return "Residents seem content"
+	if score >= 50.0:
+		return "Mixed signals"
+	if score >= 40.0:
+		return "Restless"
+	return "Trouble brewing"
+
+
+func counsel_mood(state: Dictionary) -> String:
+	var legal := int(state.get("legal", 0))
+	if legal >= 60:
+		return "Alarmed"
+	if legal >= 30:
+		return "Concerned"
+	return "Calm"

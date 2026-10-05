@@ -1,105 +1,652 @@
 [
   {
-    "id": "arch_solar", "category": "architectural",
-    "who": "{owner} · {address}",
+    "id": "arch_solar",
+    "category": "architectural",
+    "who": "{owner} \u00b7 {address}",
     "text": "Architectural request: roof solar panels, visible from the street. Bylaws are silent. The neighbors are not.",
-    "left": {"label": "Deny", "effects": {"happiness": -6, "power": 4, "legal": 8}},
-    "right": {"label": "Approve", "effects": {"happiness": 6, "power": -3}}
+    "left": {
+      "label": "Deny",
+      "effects": {
+        "happiness": -6,
+        "power": 4,
+        "legal": 8
+      }
+    },
+    "right": {
+      "label": "Approve",
+      "effects": {
+        "happiness": 6,
+        "power": -3
+      },
+      "arc": {
+        "violation": "roof",
+        "approved": "two roof panels on the rear slope",
+        "built": "panels covering the whole street-facing roof"
+      }
+    }
   },
   {
-    "id": "arch_fence", "category": "architectural",
-    "who": "{owner} · {address}",
+    "id": "arch_fence",
+    "category": "architectural",
+    "who": "{owner} \u00b7 {address}",
     "text": "Architectural request: a 6-foot fence. The rules say 4. They have a very large dog.",
-    "left": {"label": "Deny", "effects": {"happiness": -5, "power": 5, "legal": 5}},
-    "right": {"label": "Approve variance", "effects": {"happiness": 5, "power": -6, "board": -2}}
+    "left": {
+      "label": "Deny",
+      "effects": {
+        "happiness": -5,
+        "power": 5,
+        "legal": 5
+      }
+    },
+    "right": {
+      "label": "Approve variance",
+      "effects": {
+        "happiness": 5,
+        "power": -6,
+        "board": -2
+      },
+      "arc": {
+        "violation": "fence",
+        "approved": "a 4-foot beige fence",
+        "built": "a 6-foot black fence"
+      }
+    }
   },
   {
-    "id": "arch_paint", "category": "architectural",
-    "who": "{owner} · {address}",
+    "id": "arch_paint",
+    "category": "architectural",
+    "who": "{owner} \u00b7 {address}",
     "text": "Architectural request: repaint the house 'Sunrise Coral'. It is not on the approved palette. It is very coral.",
-    "left": {"label": "Deny", "effects": {"happiness": -4, "power": 5}},
-    "right": {"label": "Approve", "effects": {"happiness": 4, "power": -4, "legal": 3}}
+    "left": {
+      "label": "Deny",
+      "effects": {
+        "happiness": -4,
+        "power": 5
+      }
+    },
+    "right": {
+      "label": "Approve",
+      "effects": {
+        "happiness": 4,
+        "power": -4,
+        "legal": 3
+      },
+      "arc": {
+        "violation": "paint",
+        "approved": "approved palette color Sandstone",
+        "built": "Sunrise Coral"
+      }
+    }
   },
   {
-    "id": "arch_shed", "category": "architectural",
-    "who": "{owner} · {address}",
+    "id": "arch_shed",
+    "category": "architectural",
+    "who": "{owner} \u00b7 {address}",
     "text": "Architectural request: a backyard shed, 10x12. Plans attached. Drawn on a napkin.",
-    "left": {"label": "Deny", "effects": {"happiness": -4, "power": 4}},
-    "right": {"label": "Approve", "effects": {"happiness": 4, "power": -2, "budget": 3}}
+    "left": {
+      "label": "Deny",
+      "effects": {
+        "happiness": -4,
+        "power": 4
+      }
+    },
+    "right": {
+      "label": "Approve",
+      "effects": {
+        "happiness": 4,
+        "power": -2,
+        "budget": 3
+      },
+      "arc": {
+        "violation": "shed",
+        "approved": "a 10x12 shed in the backyard",
+        "built": "a 12x16 shed against the property line"
+      }
+    }
   },
   {
-    "id": "assess_roof", "category": "assessment",
+    "id": "assess_roof",
+    "category": "assessment",
     "who": "Treasurer",
     "text": "The clubhouse roof reserve is short. A special assessment of $300 per home would cover it. People will notice.",
-    "left": {"label": "Skip it", "effects": {"budget": -12, "happiness": 4, "board": -3}},
-    "right": {"label": "Assess homes", "effects": {"budget": 18, "happiness": -14, "legal": 4}}
+    "left": {
+      "label": "Skip it",
+      "effects": {
+        "budget": -12,
+        "happiness": 4,
+        "board": -3
+      }
+    },
+    "right": {
+      "label": "Assess homes",
+      "effects": {
+        "budget": 18,
+        "happiness": -14,
+        "legal": 4
+      }
+    }
   },
   {
-    "id": "assess_drain", "category": "assessment",
+    "id": "assess_drain",
+    "category": "assessment",
     "who": "Treasurer",
     "text": "Storm drains along HOA Way are clogged. A small assessment fixes it before the next rain. Or hope.",
-    "left": {"label": "Hope", "effects": {"budget": 4, "happiness": -8, "power": -4}},
-    "right": {"label": "Assess $120", "effects": {"budget": 10, "happiness": -6, "power": 3}}
+    "left": {
+      "label": "Hope",
+      "effects": {
+        "budget": 4,
+        "happiness": -8,
+        "power": -4
+      }
+    },
+    "right": {
+      "label": "Assess $120",
+      "effects": {
+        "budget": 10,
+        "happiness": -6,
+        "power": 3
+      }
+    }
   },
   {
-    "id": "vendor_landscape", "category": "vendor",
+    "id": "vendor_landscape",
+    "category": "vendor",
     "who": "Landscaping bids",
     "text": "Two bids to mow the commons. Budget Greens is cheap, 'mostly reliable'. Evergreen Pro costs more and shows up.",
-    "left": {"label": "Budget Greens", "effects": {"budget": 6, "happiness": -4},
-      "project": {"id": "budget_greens", "name": "Budget Greens contract", "days": 4, "daily": {"happiness": -1}, "finish": {"budget": 4}}},
-    "right": {"label": "Evergreen Pro", "effects": {"budget": -10, "happiness": 5},
-      "project": {"id": "evergreen", "name": "Evergreen Pro contract", "days": 4, "daily": {"happiness": 1}, "finish": {"power": 3}}}
+    "left": {
+      "label": "Budget Greens",
+      "effects": {
+        "budget": 6,
+        "happiness": -4
+      },
+      "project": {
+        "id": "budget_greens",
+        "name": "Budget Greens contract",
+        "days": 4,
+        "daily": {
+          "happiness": -1
+        },
+        "finish": {
+          "budget": 4
+        }
+      }
+    },
+    "right": {
+      "label": "Evergreen Pro",
+      "effects": {
+        "budget": -10,
+        "happiness": 5
+      },
+      "project": {
+        "id": "evergreen",
+        "name": "Evergreen Pro contract",
+        "days": 4,
+        "daily": {
+          "happiness": 1
+        },
+        "finish": {
+          "power": 3
+        }
+      }
+    }
   },
   {
-    "id": "vendor_paving", "category": "vendor",
+    "id": "vendor_paving",
+    "category": "vendor",
     "who": "Paving bids",
     "text": "The road needs patching. One vendor is the board president's cousin. His quote is suspiciously round.",
-    "left": {"label": "Cousin's quote", "effects": {"budget": 4, "power": 3, "legal": 10, "board": 3}},
-    "right": {"label": "Open bidding", "effects": {"budget": -10, "power": 2, "happiness": 4}}
+    "left": {
+      "label": "Cousin's quote",
+      "effects": {
+        "budget": 4,
+        "power": 3,
+        "legal": 10,
+        "board": 3
+      }
+    },
+    "right": {
+      "label": "Open bidding",
+      "effects": {
+        "budget": -10,
+        "power": 2,
+        "happiness": 4
+      }
+    }
   },
   {
-    "id": "vendor_pool", "category": "vendor",
+    "id": "vendor_pool",
+    "category": "vendor",
     "who": "Pool service",
     "text": "Pool service wants a 12-month contract. The current guy has been 'sort of' skimming since June.",
-    "left": {"label": "Keep current guy", "effects": {"budget": 4, "happiness": -6}},
-    "right": {"label": "Sign contract", "effects": {"budget": -8, "happiness": 8}}
+    "left": {
+      "label": "Keep current guy",
+      "effects": {
+        "budget": 4,
+        "happiness": -6
+      }
+    },
+    "right": {
+      "label": "Sign contract",
+      "effects": {
+        "budget": -8,
+        "happiness": 8
+      }
+    }
   },
   {
-    "id": "project_playground", "category": "project",
+    "id": "project_playground",
+    "category": "project",
     "who": "Parents' committee",
     "text": "Proposal: a new playground by the lake. Three days of work, daily cost, big payoff.",
-    "left": {"label": "Not now", "effects": {"happiness": -6}},
-    "right": {"label": "Build it", "effects": {"budget": -6, "happiness": 2},
-      "project": {"id": "playground", "name": "Playground build", "days": 3, "daily": {"budget": -4}, "finish": {"happiness": 16, "power": 4}}}
+    "left": {
+      "label": "Not now",
+      "effects": {
+        "happiness": -6
+      }
+    },
+    "right": {
+      "label": "Build it",
+      "effects": {
+        "budget": -6,
+        "happiness": 2
+      },
+      "project": {
+        "id": "playground",
+        "name": "Playground build",
+        "days": 3,
+        "daily": {
+          "budget": -4
+        },
+        "finish": {
+          "happiness": 16,
+          "power": 4
+        }
+      }
+    }
   },
   {
-    "id": "project_garden", "category": "project",
+    "id": "project_garden",
+    "category": "project",
     "who": "Garden club",
     "text": "Proposal: a community garden on the corner lot. It will take a few days and a lot of mulch.",
-    "left": {"label": "Decline", "effects": {"happiness": -4, "power": 2}},
-    "right": {"label": "Approve", "effects": {"budget": -4},
-      "project": {"id": "garden", "name": "Community garden", "days": 3, "daily": {"budget": -2}, "finish": {"happiness": 12, "budget": 4}}}
+    "left": {
+      "label": "Decline",
+      "effects": {
+        "happiness": -4,
+        "power": 2
+      }
+    },
+    "right": {
+      "label": "Approve",
+      "effects": {
+        "budget": -4
+      },
+      "project": {
+        "id": "garden",
+        "name": "Community garden",
+        "days": 3,
+        "daily": {
+          "budget": -2
+        },
+        "finish": {
+          "happiness": 12,
+          "budget": 4
+        }
+      }
+    }
   },
   {
-    "id": "project_clubhouse", "category": "project",
+    "id": "project_clubhouse",
+    "category": "project",
     "who": "Social committee",
     "text": "Proposal: renovate the clubhouse. Four days, noisy, expensive, and then it is nicer.",
-    "left": {"label": "Defer", "effects": {"happiness": -5, "board": -2}},
-    "right": {"label": "Renovate", "effects": {"budget": -8},
-      "project": {"id": "clubhouse", "name": "Clubhouse renovation", "days": 4, "daily": {"budget": -5, "happiness": -1}, "finish": {"happiness": 18, "power": 6}}}
+    "left": {
+      "label": "Defer",
+      "effects": {
+        "happiness": -5,
+        "board": -2
+      }
+    },
+    "right": {
+      "label": "Renovate",
+      "effects": {
+        "budget": -8
+      },
+      "project": {
+        "id": "clubhouse",
+        "name": "Clubhouse renovation",
+        "days": 4,
+        "daily": {
+          "budget": -5,
+          "happiness": -1
+        },
+        "finish": {
+          "happiness": 18,
+          "power": 6
+        }
+      }
+    }
   },
   {
-    "id": "politics_leniency", "category": "politics",
+    "id": "politics_leniency",
+    "category": "politics",
     "who": "Board member",
     "text": "A board member quietly asks you to 'be understanding' about a neighbor. Nothing in writing, naturally.",
-    "left": {"label": "Refuse", "effects": {"power": 4, "board": -6}},
-    "right": {"label": "Understand", "effects": {"power": -3, "board": 6, "legal": 10}}
+    "left": {
+      "label": "Refuse",
+      "effects": {
+        "power": 4,
+        "board": -6
+      }
+    },
+    "right": {
+      "label": "Understand",
+      "effects": {
+        "power": -3,
+        "board": 6,
+        "legal": 10
+      }
+    }
   },
   {
-    "id": "politics_petition", "category": "politics",
+    "id": "politics_petition",
+    "category": "politics",
     "who": "Resident petition",
     "text": "A petition with 41 signatures asks the board to review your enforcement. Several signatures are from one household.",
-    "left": {"label": "Ignore", "effects": {"power": -4, "board": -4, "happiness": -3}},
-    "right": {"label": "Hold forum", "effects": {"budget": -3, "happiness": 6, "board": 3}}
+    "left": {
+      "label": "Ignore",
+      "effects": {
+        "power": -4,
+        "board": -4,
+        "happiness": -3
+      }
+    },
+    "right": {
+      "label": "Hold forum",
+      "effects": {
+        "budget": -3,
+        "happiness": 6,
+        "board": 3
+      }
+    }
+  },
+  {
+    "id": "legal_letter",
+    "category": "legal",
+    "who": "Law office of Crane & Crane",
+    "text": "An attorney letter arrives alleging 'inconsistent enforcement.' It is four pages. The last page is a drawing of a scale.",
+    "left": {
+      "label": "Hire counsel to respond",
+      "effects": {
+        "budget": -6,
+        "legal": -12,
+        "power": 1
+      }
+    },
+    "right": {
+      "label": "File it and hope",
+      "effects": {
+        "legal": 8,
+        "power": -2
+      }
+    }
+  },
+  {
+    "id": "settlement",
+    "category": "legal",
+    "who": "Dana Ruiz \u00b7 Counsel",
+    "text": "A homeowner offers to settle their dispute for a modest sum and an apology the size of a billboard.",
+    "left": {
+      "label": "Settle quietly",
+      "effects": {
+        "budget": -5,
+        "legal": -10,
+        "happiness": 2
+      }
+    },
+    "right": {
+      "label": "Fight it",
+      "effects": {
+        "legal": 10,
+        "power": 3,
+        "board": -2
+      }
+    }
+  },
+  {
+    "id": "insurance_claim",
+    "category": "insurance",
+    "who": "Pat Whitmore \u00b7 Treasurer",
+    "text": "Insurance wants to raise the premium after the clubhouse awning blew into the pool. The pool was, in fairness, in the way.",
+    "left": {
+      "label": "Pay the higher premium",
+      "effects": {
+        "budget": -6,
+        "happiness": 1
+      },
+      "policy": {
+        "premium": 1
+      }
+    },
+    "right": {
+      "label": "Switch carriers",
+      "effects": {
+        "budget": -2,
+        "legal": 4,
+        "power": -1
+      },
+      "policy": {
+        "premium": 0
+      }
+    }
+  },
+  {
+    "id": "reserve_shortage",
+    "category": "reserve",
+    "who": "Pat Whitmore \u00b7 Treasurer",
+    "text": "The reserve study says the pool deck needs replacing in two years. The reserve fund says 'lol.'",
+    "left": {
+      "label": "Special assessment",
+      "effects": {
+        "budget": 10,
+        "happiness": -9,
+        "power": -3
+      }
+    },
+    "right": {
+      "label": "Raise dues slightly",
+      "effects": {
+        "budget": 5,
+        "happiness": -4,
+        "power": -1
+      },
+      "policy": {
+        "premium": 0
+      }
+    }
+  },
+  {
+    "id": "vendor_landscaper_miss",
+    "category": "vendor",
+    "who": "GreenEdge Landscaping",
+    "text": "The landscaper skipped two weeks 'due to a scheduling mix-up.' The lawns have noticed.",
+    "left": {
+      "label": "Fire them",
+      "effects": {
+        "budget": -3,
+        "happiness": 2
+      },
+      "vendor": {
+        "landscaper": -1
+      }
+    },
+    "right": {
+      "label": "Warn and renew",
+      "effects": {
+        "budget": 1,
+        "happiness": -3
+      },
+      "vendor": {
+        "landscaper": -1
+      }
+    }
+  },
+  {
+    "id": "vendor_landscaper_good",
+    "category": "vendor",
+    "who": "GreenEdge Landscaping",
+    "text": "The landscaper offers a premium contract: weekly edging, seasonal flowers and a suspiciously cheerful crew.",
+    "left": {
+      "label": "Decline",
+      "effects": {
+        "budget": 2
+      }
+    },
+    "right": {
+      "label": "Sign the contract",
+      "effects": {
+        "budget": -5,
+        "happiness": 4
+      },
+      "vendor": {
+        "landscaper": 1
+      }
+    }
+  },
+  {
+    "id": "vendor_pool",
+    "category": "vendor",
+    "who": "BlueWave Pool Service",
+    "text": "The pool company overbilled by $900. They call it a 'chlorine adjustment.'",
+    "left": {
+      "label": "Dispute the invoice",
+      "effects": {
+        "budget": 3,
+        "happiness": -1
+      },
+      "vendor": {
+        "pool": -1
+      }
+    },
+    "right": {
+      "label": "Pay it",
+      "effects": {
+        "budget": -4
+      },
+      "vendor": {
+        "pool": 0
+      }
+    }
+  },
+  {
+    "id": "irrigation_burst",
+    "category": "vendor",
+    "who": "Aqua-Fix Irrigation",
+    "text": "A main irrigation line burst near the clubhouse. It is, per the crew, 'very wet.'",
+    "left": {
+      "label": "Emergency repair",
+      "effects": {
+        "budget": -6,
+        "happiness": 3
+      },
+      "vendor": {
+        "irrigation": 1
+      }
+    },
+    "right": {
+      "label": "Wait for next week",
+      "effects": {
+        "happiness": -5,
+        "power": -2
+      }
+    }
+  },
+  {
+    "id": "homeowner_revolt",
+    "category": "politics",
+    "who": "Concerned Residents",
+    "text": "Forty residents sign a petition. The petition is mostly about your tone in the newsletter.",
+    "left": {
+      "label": "Hold a town hall",
+      "effects": {
+        "happiness": 6,
+        "power": -3,
+        "board": 2
+      }
+    },
+    "right": {
+      "label": "Ignore it",
+      "effects": {
+        "happiness": -6,
+        "power": 2,
+        "board": -3,
+        "legal": 3
+      }
+    }
+  },
+  {
+    "id": "board_fracture",
+    "category": "politics",
+    "who": "Board Meeting",
+    "text": "Two directors stop speaking to each other mid-agenda. A third is eating a sandwich very pointedly.",
+    "left": {
+      "label": "Broker a truce",
+      "effects": {
+        "power": 3,
+        "happiness": -1,
+        "board": 3
+      }
+    },
+    "right": {
+      "label": "Pick a side",
+      "effects": {
+        "power": -2,
+        "board": -3,
+        "legal": 2
+      }
+    }
+  },
+  {
+    "id": "towing_contract",
+    "category": "vendor",
+    "who": "Hook & Haul Towing",
+    "text": "The towing company wants a contract. They also want 'discretion.' They also want a parking space.",
+    "left": {
+      "label": "No contract",
+      "effects": {
+        "happiness": 3,
+        "budget": -1
+      }
+    },
+    "right": {
+      "label": "Sign it",
+      "effects": {
+        "budget": 5,
+        "happiness": -5,
+        "legal": 4
+      }
+    }
+  },
+  {
+    "id": "insurance_review",
+    "category": "insurance",
+    "who": "Harbor Mutual",
+    "text": "Your insurer offers a lower premium in exchange for a higher deductible and a promise not to 'disclose' the awning incident.",
+    "left": {
+      "label": "Decline",
+      "effects": {
+        "budget": -1
+      }
+    },
+    "right": {
+      "label": "Accept the deal",
+      "effects": {
+        "budget": 3,
+        "legal": 3
+      },
+      "policy": {
+        "premium": -1
+      }
+    }
   }
 ]

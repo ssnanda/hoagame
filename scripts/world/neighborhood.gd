@@ -51,10 +51,14 @@ var woods_trees: Array[Vector3] = []
 var _buckets: Dictionary = {}
 var _bulbs: Array = []
 var _rng := RandomNumberGenerator.new()
+var _name_shift := 0
 
 
-func build() -> void:
-	_rng.seed = 7771
+## `seed_value` makes every procedural choice (house mix, driveways, trees) reproducible;
+## 7771 is the shipped neighborhood. QA can sweep other seeds with tools/validate_world.gd.
+func build(seed_value := 7771) -> void:
+	_rng.seed = seed_value
+	_name_shift = 0 if seed_value == 7771 else seed_value % STREET_NAMES.size()
 	_make_streets()
 	_make_landmarks()
 	_index_roads()
@@ -99,7 +103,7 @@ func _make_streets() -> void:
 func _make_arm(dir: float, y_arm: float, arm_index: int, phase: int) -> void:
 	var arm := Street.new()
 	arm.id = streets.size()
-	arm.name = STREET_NAMES[arm_index % STREET_NAMES.size()]
+	arm.name = STREET_NAMES[(arm_index + _name_shift) % STREET_NAMES.size()]
 	arm.half = STREET_HALF
 	var sx := spine_x(y_arm)
 	var u := 0.0

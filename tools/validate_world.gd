@@ -7,6 +7,12 @@ const Violations := preload("res://scripts/sim/violations.gd")
 
 
 func _init() -> void:
+	# Optional: -- seeds=25 sweeps seeds 1..25 and reports layout warnings per seed.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("seeds="):
+			_sweep(int(arg.substr(6)))
+			quit()
+			return
 	var hood = Neighborhood.new()
 	var started := Time.get_ticks_msec()
 	hood.build()
@@ -45,3 +51,16 @@ func _init() -> void:
 						print("  Lot %d: %s object %d px outside the lot" % [lot.id, item.id, edge_gap])
 	print("WORLD SLOTS: %d violation object(s) outside their lot" % outside)
 	quit()
+
+
+
+func _sweep(count: int) -> void:
+	var bad := 0
+	for seed_value in range(1, count + 1):
+		var hood = Neighborhood.new()
+		hood.build(seed_value)
+		var warnings: Array = hood.validate()
+		if not warnings.is_empty():
+			bad += 1
+			print("SEED %d: %d warning(s), first: %s" % [seed_value, warnings.size(), warnings[0]])
+	print("SEED SWEEP: %d of %d seeds had layout warnings" % [bad, count])

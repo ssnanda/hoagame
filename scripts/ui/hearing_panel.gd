@@ -25,6 +25,9 @@ func _ready() -> void:
 	body.add_child(UiKit.label(str(data.get("address", "")), 28, UiKit.INK, true))
 	body.add_child(UiKit.section("HOMEOWNER · %s (%s)" % [str(data.get("owner", "")), str(data.get("relationship", ""))]))
 	body.add_child(UiKit.label("\"%s\"" % str(data.get("argument", "")), 24, UiKit.INK))
+	if str(data.get("twist", "")) != "":
+		body.add_child(UiKit.section("SURPRISE AT THE HEARING"))
+		body.add_child(UiKit.label(str(data.twist), 21, UiKit.BAD))
 	body.add_child(HSeparator.new())
 	body.add_child(UiKit.section("THE FILE"))
 	var rules: Array = data.get("rules", [])
@@ -38,6 +41,8 @@ func _ready() -> void:
 	body.add_child(UiKit.section("STAFF RECOMMENDATION"))
 	var rec := str(data.get("recommendation", "warning"))
 	body.add_child(UiKit.label({"fine": "Fine ($%d)" % int(data.get("fine_amount", 100)), "warning": "Written warning", "dismiss": "Dismiss the case"}[rec], 24, UiKit.ACCENT))
+	body.add_child(UiKit.section("ON THE DAIS"))
+	body.add_child(UiKit.label(", ".join(data.get("board", [])), 15, UiKit.MUTED))
 	_present = UiKit.check("Present the photographs to the board", 22)
 	_present.button_pressed = quality > 0
 	body.add_child(_present)

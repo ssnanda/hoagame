@@ -320,8 +320,22 @@ func draw_lot(c: CanvasItem, lot: LotScript) -> void:
 	var ds := signf((lot.driveway_end - lot.center).dot(lot.right()))
 	var door := lot.local_point(lot.house_size.x * 0.5 + 10.0, -ds * lot.house_size.y * 0.35)
 	c.draw_line(door, door + lot.front * 44.0, Color("cfc9bd"), 14.0, true)
-	c.draw_line(lot.mailbox, lot.mailbox + Vector2(0, -16), Color("5b4634"), 3.0, true)
-	DrawUtil.rr(c, Rect2(lot.mailbox + Vector2(-8, -26), Vector2(16, 10)), Color("344b59"), 3)
+	_mailbox(c, lot, styles[lot.id])
+	# Expansion joints along the driveway.
+	var dlen := lot.curb.distance_to(lot.driveway_end)
+	for k in range(1, int(dlen / 34.0)):
+		var jp := lot.curb + along * (k * 34.0)
+		c.draw_line(jp - across * lot.driveway_width * 0.5, jp + across * lot.driveway_width * 0.5, Color(0, 0, 0, 0.1), 1.5)
+	var style: Dictionary = styles[lot.id]
+	if style.bed:
+		# Mulch bed hugging the front of the house, behind the shrubs.
+		for k in 4:
+			var bp := lot.local_point(lot.house_size.x * 0.5 + 8.0, -ds * lot.house_size.y * (0.12 + k * 0.17))
+			DrawUtil.ellipse(c, bp, 15.0, 11.0, Color("6b4a35", 0.75))
+	if style.dead_patch and season in [1, 2]:
+		var patch := lot.local_point(lot.house_size.x * 0.5 + 34.0, ds * lot.house_size.y * 0.1)
+		DrawUtil.ellipse(c, patch, 20.0, 13.0, Color("a89a52", 0.7))
+		DrawUtil.ellipse(c, patch + Vector2(8, 4), 11.0, 7.0, Color("93864a", 0.6))
 	for k in 4:
 		var lateral := -ds * lot.house_size.y * (0.12 + k * 0.17)
 		var shrub := lot.local_point(lot.house_size.x * 0.5 + 8.0, lateral)
@@ -329,6 +343,7 @@ func draw_lot(c: CanvasItem, lot: LotScript) -> void:
 		if season == 0 and (lot.id + k) % 2 == 0:
 			c.draw_circle(shrub + Vector2(2, -2), 2.0, Color("ff9ac2"))
 	_season_yard(c, lot, season)
+	_decor(c, lot, style, ds)
 	if not lot.corner_edge.is_empty():
 		_corner_hedge(c, lot)
 	var entries: Array = ctx.layouts.get(lot.id, [])
@@ -361,14 +376,64 @@ func draw_lot(c: CanvasItem, lot: LotScript) -> void:
 		_tree(c, tree)
 
 
+func _mailbox(c: CanvasItem, lot: LotScript, style: Dictionary) -> void:
+	var m := lot.mailbox
+	DrawUtil.ellipse(c, m + Vector2(5, 3), 8.0, 4.0, Color(0, 0, 0, 0.18))
+	match int(style.mailbox):
+		1:
+			DrawUtil.rr(c, Rect2(m + Vector2(-6, -22), Vector2(12, 22)), Color("a4553f"), 2)
+			DrawUtil.rr(c, Rect2(m + Vector2(-8, -28), Vector2(16, 8)), Color("344b59"), 3)
+		2:
+			DrawUtil.rr(c, Rect2(m + Vector2(-9, -26), Vector2(18, 26)), Color("52616f"), 3)
+			for k in 3:
+				c.draw_line(m + Vector2(-6, -20 + k * 7), m + Vector2(6, -20 + k * 7), Color("c9cdd2"), 1.5)
+		_:
+			c.draw_line(m, m + Vector2(0, -16), Color("5b4634"), 3.0, true)
+			DrawUtil.rr(c, Rect2(m + Vector2(-8, -26), Vector2(16, 10)), Color("344b59"), 3)
+	# House number on the box.
+	c.draw_rect(Rect2(m + Vector2(-3, -22), Vector2(6, 2)), Color("f4ecd8"))
+
+
+## Small personal touches: flag, gnome, flamingo or wind spinner by the front walk.
+func _decor(c: CanvasItem, lot: LotScript, style: Dictionary, ds: float) -> void:
+	var p := lot.local_point(lot.house_size.x * 0.5 + 40.0, -ds * lot.house_size.y * 0.42)
+	match int(style.decor):
+		1:
+			c.draw_line(p, p + Vector2(0, -26), Color("cfd2d6"), 2.0)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(0, -26), p + Vector2(15, -22), p + Vector2(0, -16)]), Color("d94b45"))
+		2:
+			DrawUtil.ellipse(c, p + Vector2(0, 2), 5.0, 3.0, Color(0, 0, 0, 0.2))
+			c.draw_circle(p, 4.0, Color("d94b45"))
+			c.draw_circle(p + Vector2(0, 5), 3.0, Color("5aa0d6"))
+		3:
+			c.draw_line(p, p + Vector2(0, -14), Color("e56b8f"), 2.0)
+			DrawUtil.ellipse(c, p + Vector2(0, -16), 4.0, 3.0, Color("f08aa8"))
+		4:
+			c.draw_line(p, p + Vector2(0, -18), Color("52616f"), 2.0)
+			for k in 4:
+				c.draw_circle(p + Vector2(0, -22) + Vector2.from_angle(k * 1.57) * 5.0, 2.2, [Color("ff7aa8"), Color("ffd24d"), Color("5aa0d6"), Color("7ee081")][k])
+
+
 ## Hedge along the side of a corner lot that faces the other street.
 func _corner_hedge(c: CanvasItem, lot: LotScript) -> void:
 	var a: Vector2 = lot.corner_edge[0]
 	var b: Vector2 = lot.corner_edge[1]
 	var inward := (lot.center - (a + b) * 0.5).normalized() * 9.0
-	c.draw_line(a + inward, b + inward, Color("1f6b43"), 11.0, true)
-	for k in 4:
-		c.draw_circle(a.lerp(b, (k + 0.5) / 4.0) + inward, 7.0, Color("2f9e57"))
+	if lot.id % 2 == 0:
+		c.draw_line(a + inward, b + inward, Color("1f6b43"), 11.0, true)
+		for k in 4:
+			c.draw_circle(a.lerp(b, (k + 0.5) / 4.0) + inward, 7.0, Color("2f9e57"))
+	else:
+		# White picket fence instead of a hedge, so corner lots read differently lot to lot.
+		c.draw_line(a + inward, b + inward, Color("efe0bd"), 3.0, true)
+		var count := int(a.distance_to(b) / 9.0)
+		for k in count:
+			c.draw_circle(a.lerp(b, (k + 0.5) / maxf(count, 1.0)) + inward, 2.2, Color("f7f0d8"))
+	# Street-name post on the corner.
+	var post: Vector2 = a.lerp(b, 0.05) + inward * 0.2
+	c.draw_line(post, post + Vector2(0, -18), Color("52616f"), 2.0)
+	DrawUtil.rr(c, Rect2(post + Vector2(-16, -30), Vector2(32, 11)), Color("2f7a4a"), 2)
+	c.draw_line(post + Vector2(-11, -24), post + Vector2(11, -24), Color.WHITE, 1.5)
 
 
 ## Per-season yard props that hold still: spring tulips, fall leaf piles, winter snow and lights.
@@ -414,6 +479,14 @@ func _tree(c: CanvasItem, tree: Vector3) -> void:
 	var tone := sin(tree.x * 0.37 + tree.y * 0.21) * 0.12
 	var tc := Vector2(tree.x, tree.y)
 	var r: float = tree.z
+	if fposmod(tree.x * 7.0 + tree.y * 3.0, 4.0) < 1.0:
+		# Conifer: stacked triangles, stays green through winter.
+		var green := Color("1f6b43").lerp(Color("d6e2e8"), 0.35 if int(ctx.season) == 3 else 0.0)
+		for k in 3:
+			var w := r * (1.0 - k * 0.24)
+			var y0 := tc.y + r * 0.5 - k * r * 0.52
+			c.draw_colored_polygon(PackedVector2Array([Vector2(tc.x - w, y0), Vector2(tc.x + w, y0), Vector2(tc.x, y0 - r * 0.9)]), green.lightened(k * 0.06))
+		return
 	c.draw_line(tc + Vector2(0, r * 0.7), tc + Vector2(0, -r * 0.2), Color("6b4931"), 8.0, true)
 	var g := _tree_color(tone)
 	DrawUtil.ellipse(c, tc, r, r * 0.9, g)

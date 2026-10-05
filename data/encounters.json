@@ -1,0 +1,1698 @@
+[
+  {
+    "id": "calm_explain",
+    "trigger": [
+      "warning",
+      "reinspect"
+    ],
+    "rarity": "common",
+    "cooldown_days": 2,
+    "tone": "calm",
+    "pose": "shrug",
+    "props": [],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Oh! I didn't realize that was a problem. I'll take care of it this week."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} seems genuinely surprised. A rare and pleasant feeling."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Thank them",
+        "reply": "Appreciate it. The notice has the details.",
+        "result": "Neighborly.",
+        "outcome": {
+          "relationship": 4,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Offer a short extension",
+        "reply": "Take another week if you need it.",
+        "result": "Extension noted. Goodwill earned.",
+        "outcome": {
+          "relationship": 8,
+          "power": -1
+        }
+      },
+      {
+        "label": "Stand firm",
+        "reply": "The deadline stands as written.",
+        "result": "Polite, but cooler.",
+        "outcome": {
+          "relationship": -2,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "hardship",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect"
+    ],
+    "rarity": "common",
+    "cooldown_days": 4,
+    "tone": "pleading",
+    "pose": "pleading",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "elderly",
+        "new_homeowner",
+        "friendly"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "My mother lost her apartment. She's staying with us for two weeks. Please."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} holds a folder that may or may not contain documentation."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Ask for documentation",
+        "reply": "Send me something in writing and I'll note the file.",
+        "result": "Reasonable. Residents appreciate a paper trail.",
+        "outcome": {
+          "relationship": 5,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Grant an extension",
+        "reply": "Two weeks. Please keep me posted.",
+        "result": "Kind. Some neighbors may call it favoritism.",
+        "outcome": {
+          "relationship": 10,
+          "legal": 2,
+          "happiness": 2
+        }
+      },
+      {
+        "label": "Rules are rules",
+        "reply": "I'm sorry. The process has to be the same for everyone.",
+        "result": "Consistent, and cold.",
+        "outcome": {
+          "relationship": -6,
+          "legal": -2,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "angry_grass",
+    "trigger": [
+      "warning",
+      "fine"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 5,
+    "tone": "angry",
+    "pose": "pointing",
+    "props": [],
+    "when": {
+      "max_rel": 20
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "YOU TOOK A PICTURE OF MY LAWN?"
+      },
+      {
+        "who": "player",
+        "text": "The notice lists the measurement."
+      },
+      {
+        "who": "resident",
+        "text": "THEN MEASURE STEVE'S. HE HAS A JUNGLE."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Explain the process",
+        "reply": "Every complaint is inspected the same way. If Steve's is reported, he'll be visited.",
+        "result": "They grumble, but they heard you.",
+        "outcome": {
+          "relationship": 1,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Promise to check Steve's",
+        "reply": "Fair point. I'll look at it next.",
+        "result": "A promise is a promise. Don't forget it.",
+        "outcome": {
+          "relationship": 4,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Walk away",
+        "reply": "Have a good afternoon.",
+        "result": "They shout the rest at your back.",
+        "outcome": {
+          "relationship": -6,
+          "happiness": -1
+        }
+      },
+      {
+        "label": "Threaten a fine",
+        "reply": "Keep this up and the next letter has a number in it.",
+        "result": "A neighbor starts filming.",
+        "outcome": {
+          "relationship": -12,
+          "legal": 4,
+          "board": -1
+        }
+      }
+    ]
+  },
+  {
+    "id": "selective_enforcement",
+    "trigger": [
+      "warning",
+      "fine",
+      "hearing"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 6,
+    "tone": "angry",
+    "pose": "arms_crossed",
+    "props": [],
+    "when": {
+      "min_unfair": 1
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Funny how the rules only seem to apply to some of us."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} keeps a spreadsheet. It is color-coded."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Acknowledge it",
+        "reply": "You're right to ask. I'll review how these are handled.",
+        "result": "Honest, and humbling.",
+        "outcome": {
+          "relationship": 3,
+          "legal": -2,
+          "power": -1
+        }
+      },
+      {
+        "label": "Deny it",
+        "reply": "Every case is handled on the facts.",
+        "result": "The spreadsheet says otherwise.",
+        "outcome": {
+          "relationship": -6,
+          "legal": 4
+        }
+      },
+      {
+        "label": "End conversation",
+        "reply": "I'm done here. Good day.",
+        "result": "They'll bring it to the next meeting.",
+        "outcome": {
+          "relationship": -4,
+          "legal": 2,
+          "board": -1
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "filming",
+    "trigger": [
+      "warning",
+      "fine",
+      "dismiss"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 6,
+    "tone": "tense",
+    "pose": "filming",
+    "props": [
+      "phone"
+    ],
+    "when": {
+      "traits_any": [
+        "litigious",
+        "anti_hoa",
+        "gossip",
+        "chronic_complainer"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Go ahead. Say it again. I'm recording this for my attorney."
+      },
+      {
+        "who": "narration",
+        "text": "The phone has a tiny red dot. So does your forehead, metaphorically."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Stay professional",
+        "reply": "Please see the notice. I'll be on my way.",
+        "result": "Boring footage. Excellent outcome.",
+        "outcome": {
+          "relationship": 0,
+          "legal": -2
+        }
+      },
+      {
+        "label": "Wave at the camera",
+        "reply": "Hi, everyone! Mind the HOA bylaws!",
+        "result": "It will go viral in a four-house radius.",
+        "outcome": {
+          "relationship": -3,
+          "happiness": 2,
+          "legal": 1
+        }
+      },
+      {
+        "label": "Ask them to stop",
+        "reply": "I'd rather not be filmed, please.",
+        "result": "They film a little closer.",
+        "outcome": {
+          "relationship": -5,
+          "legal": 2
+        }
+      }
+    ],
+    "footer": "A CLIP IS CIRCULATING IN THE NEIGHBORHOOD CHAT."
+  },
+  {
+    "id": "dog_clipboard",
+    "trigger": [
+      "warning",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 10,
+    "tone": "comic",
+    "pose": "laughing",
+    "props": [
+      "dog"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A very fast dog appears from behind the hedge."
+      },
+      {
+        "who": "resident",
+        "text": "BISCUIT, NO! DROP THE CLIPBOARD!"
+      },
+      {
+        "who": "narration",
+        "text": "Biscuit does not drop the clipboard. Biscuit has a vision."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Chase the dog",
+        "reply": "That's evidence! Biscuit, come back!",
+        "result": "You lose ten minutes, a shoe, and your dignity.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 2,
+          "slow": 25
+        }
+      },
+      {
+        "label": "Offer a treat",
+        "reply": "Biscuit. Biscuit. Who's a good dog?",
+        "result": "Clipboard returned, slightly chewed.",
+        "outcome": {
+          "relationship": 8,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Let the dog have it",
+        "reply": "Keep it. Lots of paperwork anyway.",
+        "result": "Biscuit is now an unofficial committee member.",
+        "outcome": {
+          "relationship": 5,
+          "happiness": 3,
+          "power": -1
+        }
+      }
+    ]
+  },
+  {
+    "id": "sprinkler_surprise",
+    "trigger": [
+      "warning",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 10,
+    "tone": "comic",
+    "pose": "laughing",
+    "props": [
+      "sprinkler"
+    ],
+    "when": {
+      "season": [
+        0,
+        1
+      ]
+    },
+    "lines": [
+      {
+        "who": "player",
+        "text": "As you can see in the notice, the lawn\u2014"
+      },
+      {
+        "who": "narration",
+        "text": "Every sprinkler in the yard turns on at once. They are all aimed at you."
+      },
+      {
+        "who": "resident",
+        "text": "...The timer is a new feature."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Finish the sentence",
+        "reply": "\u2014needs attention. Thank you.",
+        "result": "Professionalism, soaked through.",
+        "outcome": {
+          "relationship": 5,
+          "happiness": 2,
+          "slow": 15
+        }
+      },
+      {
+        "label": "Retreat dramatically",
+        "reply": "I'll be going now!",
+        "result": "You slip on the mulch. Nobody saw. Everyone saw.",
+        "outcome": {
+          "relationship": 3,
+          "happiness": 2,
+          "slow": 20
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "leaf_blower",
+    "trigger": [
+      "warning",
+      "fine"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 6,
+    "tone": "comic",
+    "pose": "yelling",
+    "props": [
+      "leafblower"
+    ],
+    "when": {
+      "season": [
+        2
+      ]
+    },
+    "lines": [
+      {
+        "who": "player",
+        "text": "The notice explains the\u2014"
+      },
+      {
+        "who": "narration",
+        "text": "A leaf blower starts up next door. Conversation becomes interpretive."
+      },
+      {
+        "who": "resident",
+        "text": "WHAT? I CAN'T HEAR YOU OVER MY NEIGHBOR!"
+      }
+    ],
+    "choices": [
+      {
+        "label": "Shout the rules",
+        "reply": "THE DEADLINE IS ON THE NOTICE!",
+        "result": "Everyone on the street now knows your business.",
+        "outcome": {
+          "relationship": -2,
+          "happiness": -1
+        }
+      },
+      {
+        "label": "Hand over the notice",
+        "reply": "(Gestures at paper.)",
+        "result": "Understood in mime. Efficient.",
+        "outcome": {
+          "relationship": 2
+        }
+      },
+      {
+        "label": "Visit the neighbor",
+        "reply": "(Points sternly at the blower.)",
+        "result": "You've started something. Possibly a second case.",
+        "outcome": {
+          "relationship": 3,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "neighbor_joins",
+    "trigger": [
+      "warning",
+      "fine"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 12,
+    "tone": "angry",
+    "pose": "yelling",
+    "props": [
+      "neighbor"
+    ],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "This is harassment!"
+      },
+      {
+        "who": "narration",
+        "text": "A neighbor appears in a bathrobe with opinions about the mailbox."
+      },
+      {
+        "who": "resident",
+        "text": "And while you're here, have you SEEN what the Hendersons did to their gutters?"
+      }
+    ],
+    "choices": [
+      {
+        "label": "De-escalate",
+        "reply": "Let's take it one issue at a time. I'll note everything.",
+        "result": "Two grievances now filed, calmly.",
+        "outcome": {
+          "relationship": 2,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Refer to a hearing",
+        "reply": "Anyone with a concern is welcome at the next meeting.",
+        "result": "They'll take you up on that.",
+        "outcome": {
+          "relationship": -2,
+          "legal": -1,
+          "board": 1
+        }
+      },
+      {
+        "label": "Raise your voice",
+        "reply": "EVERYONE, PLEASE STOP SHOUTING!",
+        "result": "Nobody stops shouting.",
+        "outcome": {
+          "relationship": -8,
+          "legal": 3,
+          "happiness": -2
+        }
+      }
+    ],
+    "footer": "A DIRECTOR HAS BEEN CALLED."
+  },
+  {
+    "id": "board_friend",
+    "trigger": [
+      "warning",
+      "fine",
+      "hearing"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 8,
+    "tone": "tense",
+    "pose": "arms_crossed",
+    "props": [
+      "phone"
+    ],
+    "when": {
+      "traits_any": [
+        "board_insider"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I had coffee with the Treasurer on Tuesday. She mentioned you'd be... understanding."
+      },
+      {
+        "who": "narration",
+        "text": "The phone buzzes. It's the Treasurer. Of course it is."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Hold the line",
+        "reply": "I appreciate the friendship. The notice stands.",
+        "result": "Principled, and a director will remember it.",
+        "outcome": {
+          "relationship": -4,
+          "board": -2,
+          "legal": -2
+        }
+      },
+      {
+        "label": "Quietly look the other way",
+        "reply": "I'll see what I can do.",
+        "result": "Easy now. Hard to explain later.",
+        "outcome": {
+          "relationship": 10,
+          "board": 2,
+          "legal": 4
+        }
+      }
+    ]
+  },
+  {
+    "id": "van_blocks_photo",
+    "trigger": [
+      "reinspect",
+      "warning"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 12,
+    "tone": "comic",
+    "pose": "shrug",
+    "props": [
+      "van"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A delivery van parks itself precisely between you and the evidence."
+      },
+      {
+        "who": "resident",
+        "text": "That's, uh, a coincidence. I swear."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Wait it out",
+        "reply": "I'll stand here. Take your time.",
+        "result": "Eleven minutes pass. The van leaves. So does your patience.",
+        "outcome": {
+          "relationship": 2,
+          "slow": 20
+        }
+      },
+      {
+        "label": "Photograph the van",
+        "reply": "Well, that's documented too.",
+        "result": "You have the best photo of a van in HOA history.",
+        "outcome": {
+          "relationship": -1,
+          "happiness": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "slapstick_blanket",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "very_rare",
+    "cooldown_days": 90,
+    "tone": "slapstick",
+    "pose": "yelling",
+    "props": [
+      "van",
+      "blanket",
+      "dog",
+      "sprinkler",
+      "phone",
+      "neighbor"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A dog escapes. The inspector runs. A sprinkler activates."
+      },
+      {
+        "who": "narration",
+        "text": "A delivery vehicle brakes dramatically. The inspector, regrettably, does not."
+      },
+      {
+        "who": "narration",
+        "text": "The inspector lies stunned, in the way only cartoons allow. A neighbor sprints out with a blanket."
+      },
+      {
+        "who": "narration",
+        "text": "Another resident films everything. Someone has already called the board secretary."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Insist you're fine",
+        "reply": "I'm fine! This is fine! Everything's within code!",
+        "result": "Nobody believes you. The blanket stays on.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 4,
+          "slow": 40,
+          "power": -2
+        }
+      },
+      {
+        "label": "Ask for the video",
+        "reply": "Please never post that.",
+        "result": "It's already up. It has a soundtrack.",
+        "outcome": {
+          "relationship": 4,
+          "happiness": 3,
+          "legal": 1,
+          "slow": 30
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "paranoid_county",
+    "trigger": [
+      "warning",
+      "fine",
+      "dismiss"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 7,
+    "tone": "tense",
+    "pose": "arms_crossed",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "paranoid"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "You're not really with the HOA. Who sent you? Is this about the satellite dish?"
+      },
+      {
+        "who": "narration",
+        "text": "{owner} peers at your clipboard as if it might be recording."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Show your badge",
+        "reply": "Here's the board resolution naming me president.",
+        "result": "They photograph it. Twice.",
+        "outcome": {
+          "relationship": 2,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Play along",
+        "reply": "I can neither confirm nor deny anything about dishes.",
+        "result": "They nod gravely. You have a new friend, or an informant.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Leave the notice",
+        "reply": "The details are on the paper. Good day.",
+        "result": "The notice is inspected for hidden cameras.",
+        "outcome": {
+          "relationship": -1
+        }
+      }
+    ]
+  },
+  {
+    "id": "passive_card",
+    "trigger": [
+      "warning",
+      "reinspect"
+    ],
+    "rarity": "common",
+    "cooldown_days": 5,
+    "tone": "calm",
+    "pose": "arms_crossed",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "passive_aggressive"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Oh, no, it's FINE. I'm sure the rules are very important to you."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} smiles in a way that will appear in the next newsletter's comments."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Take them at their word",
+        "reply": "Great. Thanks for understanding.",
+        "result": "It was not understanding.",
+        "outcome": {
+          "relationship": -3,
+          "legal": 1
+        }
+      },
+      {
+        "label": "Ask what's wrong",
+        "reply": "It sounds like something's bothering you. Want to talk it through?",
+        "result": "Forty minutes later you know about the gutters, the HOA fee and the divorce.",
+        "outcome": {
+          "relationship": 7,
+          "happiness": 1,
+          "slow": 15
+        }
+      },
+      {
+        "label": "Stay on topic",
+        "reply": "I'd just like to confirm the cure date.",
+        "result": "A card arrives the next day. It is unsigned.",
+        "outcome": {
+          "relationship": -4
+        }
+      }
+    ]
+  },
+  {
+    "id": "eccentric_gnomes",
+    "trigger": [
+      "warning",
+      "dismiss",
+      "reinspect"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 8,
+    "tone": "comic",
+    "pose": "pleading",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "eccentric"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "The gnomes are load-bearing. If you remove one, the whole lawn collapses spiritually."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} wears a wizard hat. Nobody has asked about it."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Accept the gnomes",
+        "reply": "The gnomes may stay.",
+        "result": "A gnome has been added to your Christmas card list.",
+        "outcome": {
+          "relationship": 8,
+          "happiness": 2,
+          "power": -1
+        }
+      },
+      {
+        "label": "Ask for a plan",
+        "reply": "Could you map where each gnome goes?",
+        "result": "The map is beautiful. It is also a scroll.",
+        "outcome": {
+          "relationship": 4
+        }
+      },
+      {
+        "label": "Hold the line",
+        "reply": "Gnomes are allowed. The grass is not.",
+        "result": "The wizard hat is removed in disgust.",
+        "outcome": {
+          "relationship": -4,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "forgot_notice",
+    "trigger": [
+      "reinspect",
+      "warning"
+    ],
+    "rarity": "common",
+    "cooldown_days": 4,
+    "tone": "calm",
+    "pose": "shrug",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "forgetful"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Wait, was that this week? I put the letter somewhere very safe."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} begins looking in the freezer."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Hand over a copy",
+        "reply": "Here's a fresh copy. The date is circled.",
+        "result": "Gratitude, and a fridge magnet.",
+        "outcome": {
+          "relationship": 5
+        }
+      },
+      {
+        "label": "Offer a reminder call",
+        "reply": "I'll text you on the day.",
+        "result": "Helpful. Slightly overstepping.",
+        "outcome": {
+          "relationship": 8,
+          "power": -1
+        }
+      },
+      {
+        "label": "Stand firm",
+        "reply": "The date is the date.",
+        "result": "They find the letter in the freezer. It's cold, but legible.",
+        "outcome": {
+          "relationship": -2,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "golf_cart_boxed",
+    "trigger": [
+      "warning",
+      "reinspect",
+      "fine"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 14,
+    "tone": "comic",
+    "pose": "yelling",
+    "props": [
+      "van",
+      "neighbor"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "You return to your golf cart. A van has parked in front of it. A neighbor has parked a lawn chair behind it."
+      },
+      {
+        "who": "resident",
+        "text": "I'm not saying it's a barricade. I'm saying it's a *position*."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Ask nicely",
+        "reply": "Could someone move a van, please?",
+        "result": "The van moves in nine minutes. The chair, never.",
+        "outcome": {
+          "relationship": 3,
+          "slow": 20
+        }
+      },
+      {
+        "label": "Take the long way",
+        "reply": "I'll walk. It's good for the soul.",
+        "result": "You do. It isn't.",
+        "outcome": {
+          "relationship": 1,
+          "happiness": 1,
+          "slow": 30
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "visit_greeting",
+    "trigger": [
+      "visit"
+    ],
+    "rarity": "common",
+    "cooldown_days": 1,
+    "tone": "calm",
+    "pose": "waving",
+    "props": [],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Oh, hi! I saw you coming up the street. Is this about the thing?"
+      },
+      {
+        "who": "narration",
+        "text": "{owner} is friendly. That will not last."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Yes, a complaint came in",
+        "reply": "A report was filed. I'd like to take a look.",
+        "result": "They step aside, a little nervous.",
+        "outcome": {
+          "relationship": 1
+        }
+      },
+      {
+        "label": "Just a routine check",
+        "reply": "Routine walk-through. Won't take long.",
+        "result": "They relax. Possibly too much.",
+        "outcome": {
+          "relationship": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "visit_not_home",
+    "trigger": [
+      "visit"
+    ],
+    "rarity": "common",
+    "cooldown_days": 2,
+    "tone": "calm",
+    "pose": "shrug",
+    "props": [],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "Nobody answers the door. A curtain moves anyway."
+      },
+      {
+        "who": "narration",
+        "text": "A note on the mailbox reads: 'BACK AT 5. DO NOT TOUCH THE GNOME.'"
+      }
+    ],
+    "choices": [
+      {
+        "label": "Proceed with the inspection",
+        "reply": "I'll look from the curb.",
+        "result": "Within your rights. Nobody can say you didn't knock.",
+        "outcome": {
+          "relationship": 0
+        }
+      },
+      {
+        "label": "Leave a courtesy card",
+        "reply": "(Leaves a card with a friendly note.)",
+        "result": "The card is quietly appreciated.",
+        "outcome": {
+          "relationship": 3
+        }
+      }
+    ]
+  },
+  {
+    "id": "visit_nosy_neighbor",
+    "trigger": [
+      "visit"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 4,
+    "tone": "tense",
+    "pose": "pointing",
+    "props": [
+      "neighbor"
+    ],
+    "when": {
+      "traits_any": [
+        "gossip",
+        "chronic_complainer"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I'm the one who called. I've got photos, dates, and a timeline."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} hands you a folder. It is color-tabbed."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Take the folder",
+        "reply": "Thank you. I'll review it.",
+        "result": "They stand there while you review it.",
+        "outcome": {
+          "relationship": 2,
+          "legal": -1
+        }
+      },
+      {
+        "label": "Decline politely",
+        "reply": "I'll form my own view, thanks.",
+        "result": "They sigh like a kettle.",
+        "outcome": {
+          "relationship": -2
+        }
+      }
+    ]
+  },
+  {
+    "id": "visit_favored",
+    "trigger": [
+      "visit"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 6,
+    "tone": "angry",
+    "pose": "arms_crossed",
+    "props": [],
+    "when": {
+      "needs_favored": true,
+      "traits_any": [
+        "chronic_complainer",
+        "anti_hoa",
+        "litigious",
+        "confrontational"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Funny how {favored}'s violation has been sitting there for months. But here you are. At MY house."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} has a point, and knows it."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Admit the inconsistency",
+        "reply": "You're right to raise it. I'll look into {favored}'s too.",
+        "result": "A promise. Keep it.",
+        "outcome": {
+          "relationship": 4,
+          "legal": -2
+        }
+      },
+      {
+        "label": "Deflect",
+        "reply": "I can only speak to this property today.",
+        "result": "They write it down.",
+        "outcome": {
+          "relationship": -5,
+          "legal": 4
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "favored_ruling",
+    "trigger": [
+      "warning",
+      "fine",
+      "hearing"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 7,
+    "tone": "angry",
+    "pose": "pointing",
+    "props": [],
+    "when": {
+      "needs_favored": true,
+      "traits_any": [
+        "chronic_complainer",
+        "anti_hoa",
+        "litigious",
+        "confrontational",
+        "passive_aggressive"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "Funny how {favored}'s violation hasn't been touched, but mine gets a letter in four days."
+      },
+      {
+        "who": "narration",
+        "text": "The mailman, pretending not to listen, listens."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Review {favored}'s case",
+        "reply": "Fair. I'll make sure the standard is the same.",
+        "result": "Credibility, cautiously restored.",
+        "outcome": {
+          "relationship": 3,
+          "legal": -3
+        }
+      },
+      {
+        "label": "Say nothing",
+        "reply": "...",
+        "result": "Silence reads as a yes.",
+        "outcome": {
+          "relationship": -6,
+          "legal": 5
+        }
+      }
+    ],
+    "footer": "AN ATTORNEY LETTER MAY FOLLOW."
+  },
+  {
+    "id": "slapstick_chase",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 20,
+    "tone": "slapstick",
+    "pose": "running",
+    "props": [
+      "dog",
+      "mud"
+    ],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "BISCUIT! THE INSPECTOR IS NOT A SQUIRREL!"
+      },
+      {
+        "who": "narration",
+        "text": "The inspector runs. The dog runs faster. The mud is a surprise to everyone."
+      },
+      {
+        "who": "narration",
+        "text": "The inspector slides. Briefly, spectacularly."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Get up with dignity",
+        "reply": "I'm fine. The notice is on the door.",
+        "result": "A neighbor starts a slow clap.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 2,
+          "slow": 25
+        }
+      },
+      {
+        "label": "Stay down a minute",
+        "reply": "I'm going to lie here for a bit.",
+        "result": "Someone brings a towel and a lemonade.",
+        "outcome": {
+          "relationship": 8,
+          "happiness": 3,
+          "slow": 35
+        }
+      }
+    ]
+  },
+  {
+    "id": "slapstick_inflatable",
+    "trigger": [
+      "warning",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 20,
+    "tone": "slapstick",
+    "pose": "yelling",
+    "props": [
+      "inflatable",
+      "neighbor"
+    ],
+    "when": {
+      "season": [
+        2,
+        3
+      ]
+    },
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A gust catches a ten-foot inflatable turkey. It makes a break for the street."
+      },
+      {
+        "who": "resident",
+        "text": "STOP THAT TURKEY! IT'S ALSO A COMPLIANCE ISSUE!"
+      }
+    ],
+    "choices": [
+      {
+        "label": "Chase the turkey",
+        "reply": "Come back here!",
+        "result": "You catch it at the stop sign. It's heavier than it looks.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 2,
+          "slow": 20
+        }
+      },
+      {
+        "label": "Let it go",
+        "reply": "It's the turkey's decision.",
+        "result": "It was seen near the clubhouse. Nobody could stop it.",
+        "outcome": {
+          "relationship": 3,
+          "happiness": 3
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "slapstick_chairs",
+    "trigger": [
+      "warning",
+      "fine"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 20,
+    "tone": "comic",
+    "pose": "arms_crossed",
+    "props": [
+      "chairs"
+    ],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I'm not blocking the driveway. I'm just... arranging seating."
+      },
+      {
+        "who": "narration",
+        "text": "Five lawn chairs form a perfect line. Nobody is sitting in them."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Sit in a chair",
+        "reply": "Mind if I join?",
+        "result": "An unexpected truce, and a lemonade.",
+        "outcome": {
+          "relationship": 8,
+          "happiness": 2,
+          "slow": 15
+        }
+      },
+      {
+        "label": "Remove a chair",
+        "reply": "The notice is about the driveway.",
+        "result": "They remove four. Technically a concession.",
+        "outcome": {
+          "relationship": -2,
+          "power": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "slapstick_tarp",
+    "trigger": [
+      "warning",
+      "reinspect"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 20,
+    "tone": "comic",
+    "pose": "shrug",
+    "props": [
+      "tarp"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A large blue tarp has appeared over the vehicle in question, tied with enormous confidence."
+      },
+      {
+        "who": "resident",
+        "text": "What vehicle? I see no vehicle."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Lift the tarp",
+        "reply": "Let's take a look.",
+        "result": "It is, in fact, a vehicle.",
+        "outcome": {
+          "relationship": -3,
+          "power": 1
+        }
+      },
+      {
+        "label": "Note it and move on",
+        "reply": "I'll note the tarp.",
+        "result": "Tarp noted. Dignity preserved.",
+        "outcome": {
+          "relationship": 3
+        }
+      }
+    ]
+  },
+  {
+    "id": "slapstick_landscaper",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 20,
+    "tone": "comic",
+    "pose": "confused",
+    "props": [
+      "mower",
+      "neighbor"
+    ],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "No no no\u2014that's not my lawn! THAT'S NOT MY LAWN!"
+      },
+      {
+        "who": "narration",
+        "text": "A landscaper mows a very precise line through the wrong yard."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Stop the crew",
+        "reply": "Please stop! Wrong address!",
+        "result": "The crew apologizes. The lawn is now two-toned.",
+        "outcome": {
+          "relationship": 4,
+          "happiness": 1
+        }
+      },
+      {
+        "label": "Photograph it",
+        "reply": "I'll document this for the vendor.",
+        "result": "Excellent evidence. Terrible lawn.",
+        "outcome": {
+          "relationship": 2,
+          "happiness": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "police_misunderstanding",
+    "trigger": [
+      "warning",
+      "fine"
+    ],
+    "rarity": "rare",
+    "cooldown_days": 25,
+    "tone": "slapstick",
+    "pose": "yelling",
+    "props": [
+      "police",
+      "neighbor",
+      "phone"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "A neighbor, mid-yell, is mistaken by a passerby for a disturbance. Someone calls it in."
+      },
+      {
+        "who": "narration",
+        "text": "A police car arrives. The officer looks at the clipboard, then at the lawn, then at everyone."
+      },
+      {
+        "who": "narration",
+        "text": "The officer asks the only reasonable question: 'Over... grass?'"
+      }
+    ],
+    "choices": [
+      {
+        "label": "Explain calmly",
+        "reply": "It's an HOA matter. Nobody's in danger.",
+        "result": "The officer leaves with the faint look of someone updating a mental file.",
+        "outcome": {
+          "relationship": -2,
+          "legal": 2,
+          "happiness": 2
+        }
+      },
+      {
+        "label": "Apologize to everyone",
+        "reply": "My apologies for the confusion, all around.",
+        "result": "Everyone leaves faintly embarrassed.",
+        "outcome": {
+          "relationship": 4,
+          "legal": 1
+        }
+      }
+    ],
+    "footer": "A POLICE REPORT HAS BEEN FILED."
+  },
+  {
+    "id": "ambulance_misread",
+    "trigger": [
+      "fine",
+      "hearing"
+    ],
+    "rarity": "very_rare",
+    "cooldown_days": 60,
+    "tone": "slapstick",
+    "pose": "crying",
+    "props": [
+      "ambulance",
+      "neighbor",
+      "phone",
+      "blanket"
+    ],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I'M FINE! I JUST TRIPPED OVER THE FINE! THE LETTER! THE ACTUAL LETTER!"
+      },
+      {
+        "who": "narration",
+        "text": "An ambulance arrives for a resident who is, in fact, fine."
+      },
+      {
+        "who": "narration",
+        "text": "Paramedics wrap them in a blanket anyway. Three people film. The board secretary is already typing."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Offer a ride to the clubhouse",
+        "reply": "Let me at least drive you somewhere shaded.",
+        "result": "The golf cart carries one blanket-wrapped homeowner. It is not a parade, but it looks like one.",
+        "outcome": {
+          "relationship": 10,
+          "happiness": 4,
+          "slow": 30
+        }
+      },
+      {
+        "label": "Slip away",
+        "reply": "(Backs away slowly.)",
+        "result": "You are spotted. Of course you are spotted.",
+        "outcome": {
+          "relationship": -4,
+          "legal": 3
+        }
+      }
+    ],
+    "footer": "THIS MAY COME UP AT THE NEXT MEETING."
+  },
+  {
+    "id": "slapstick_car_bump",
+    "trigger": [
+      "warning",
+      "fine",
+      "reinspect",
+      "dismiss"
+    ],
+    "rarity": "very_rare",
+    "cooldown_days": 90,
+    "tone": "slapstick",
+    "pose": "yelling",
+    "props": [
+      "car",
+      "blanket",
+      "neighbor",
+      "phone",
+      "dog"
+    ],
+    "lines": [
+      {
+        "who": "narration",
+        "text": "An inattentive driver, glued to a podcast, bumps the inspector at roughly the speed of a brisk walk."
+      },
+      {
+        "who": "narration",
+        "text": "The inspector goes down in the grand tradition of cartoons: stars, a fluttering clipboard, one slow-motion shoe."
+      },
+      {
+        "who": "narration",
+        "text": "Neighbors rush over with a blanket. A dog helps. Someone films all of it."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Insist you're fine",
+        "reply": "I am FINE. Everyone is FINE. Please do not post that.",
+        "result": "They post it. It has a laugh track.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 4,
+          "slow": 40,
+          "power": -2
+        }
+      },
+      {
+        "label": "Ask for a paper towel",
+        "reply": "I'll take a paper towel and a moment of silence.",
+        "result": "A very polite crowd forms. Nobody leaves.",
+        "outcome": {
+          "relationship": 8,
+          "happiness": 3,
+          "slow": 35
+        }
+      }
+    ],
+    "footer": "A RESIDENT HAS FILED AN INSURANCE CLAIM."
+  },
+  {
+    "id": "happy_cured",
+    "trigger": [
+      "reinspect"
+    ],
+    "rarity": "common",
+    "cooldown_days": 3,
+    "tone": "calm",
+    "pose": "celebrating",
+    "props": [],
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I fixed it! I fixed all of it! Check the back too!"
+      },
+      {
+        "who": "narration",
+        "text": "{owner} has not been this proud since the school science fair."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Congratulate them",
+        "reply": "Great work. It looks good.",
+        "result": "Neighborhood morale ticks up.",
+        "outcome": {
+          "relationship": 6,
+          "happiness": 2
+        }
+      },
+      {
+        "label": "Remind them about maintenance",
+        "reply": "Keep it up through the season.",
+        "result": "They nod. Genuinely.",
+        "outcome": {
+          "relationship": 2
+        }
+      }
+    ]
+  },
+  {
+    "id": "cried_fine",
+    "trigger": [
+      "fine"
+    ],
+    "rarity": "uncommon",
+    "cooldown_days": 10,
+    "tone": "pleading",
+    "pose": "crying",
+    "props": [],
+    "when": {
+      "traits_any": [
+        "elderly",
+        "new_homeowner",
+        "friendly"
+      ]
+    },
+    "lines": [
+      {
+        "who": "resident",
+        "text": "I just wanted the yard to look nice for my daughter's wedding. I'm sorry."
+      },
+      {
+        "who": "narration",
+        "text": "{owner} dabs their eyes with a gardening glove."
+      }
+    ],
+    "choices": [
+      {
+        "label": "Offer a payment plan",
+        "reply": "We can spread it over two months.",
+        "result": "Relief floods the porch.",
+        "outcome": {
+          "relationship": 8,
+          "budget": -1
+        }
+      },
+      {
+        "label": "Stay firm",
+        "reply": "I understand, but the fine stands.",
+        "result": "Painfully correct.",
+        "outcome": {
+          "relationship": -6,
+          "legal": -1
+        }
+      }
+    ]
+  }
+]

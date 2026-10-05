@@ -33,6 +33,16 @@ static func make_style(lot: LotScript) -> Dictionary:
 		"garage_open": rng.randf() < 0.14,
 		"lights": rng.randf() < 0.7,
 		"garage_color": Color("c9cdd2").lerp(Color("8a8f98"), rng.randf() * 0.5),
+		"shutter": [Color("2f4858"), Color("7a2f2a"), Color("2f5a43"), Color("f4ecd8"), Color("3b3b44")][rng.randi() % 5],
+		"shutters": arch in [0, 2, 3] and rng.randf() < 0.7,
+		"porch": arch in [0, 2, 5] and rng.randf() < 0.6,
+		"decor": rng.randi() % 5,          ## 0 none, 1 flag, 2 gnome, 3 flamingo, 4 wind spinner
+		"bed": rng.randf() < 0.75,
+		"mailbox": rng.randi() % 3,        ## 0 post, 1 brick pillar, 2 cluster box
+		"conifer": rng.randf() < 0.25,
+		"dead_patch": rng.randf() < 0.3,
+		"deck": rng.randf() < 0.25 and arch != 4,
+		"swing": rng.randf() < 0.12,
 	}
 
 
@@ -115,10 +125,46 @@ static func draw(c: CanvasItem, base: Transform2D, lot: LotScript, style: Dictio
 		DrawUtil.ellipse(c, Vector2(hx + 8.0, door_y), 20.0, 16.0, Color("ffd36e", 0.5 * dusk))
 		for wy in [-hy * 0.6, hy * 0.6]:
 			DrawUtil.rr(c, Rect2(hx - 8.0, wy - 9.0, 8.0, 18.0), Color("ffd36e", 0.8 * dusk), 2)
+	_details(c, lot, style, hx, hy, drive_lat, ds, door_y, dusk)
 	for entry: Dictionary in entries:
 		if entry.on_house:
 			ObjectPainter.house_object(c, entry, lot, time)
 	c.draw_set_transform_matrix(base)
+
+
+## Trim that makes each house its own: shutters, porch roof and columns, window glints,
+## a back deck and a swing set, plus roof shingle texture.
+static func _details(c: CanvasItem, lot: LotScript, style: Dictionary, hx: float, hy: float, drive_lat: float,
+		ds: float, door_y: float, dusk: float) -> void:
+	var trim := Color("f4ecd8").lerp(Color("6c6280"), dusk * 0.4)
+	if style.shutters:
+		for wy in [-hy * 0.6, hy * 0.6]:
+			if absf(wy - drive_lat) < 30.0:
+				continue
+			for side in [-1.0, 1.0]:
+				c.draw_rect(Rect2(hx - 9.0, wy + side * 13.0 - 2.5, 7.0, 5.0), style.shutter)
+			c.draw_rect(Rect2(hx - 8.0, wy - 8.0, 6.0, 16.0), Color("a8c9d6", 0.55).lerp(Color("2a3550"), dusk * 0.6))
+			c.draw_rect(Rect2(hx - 8.0, wy - 8.0, 6.0, 16.0), trim, false, 1.0)
+	if style.porch:
+		# Porch roof over the front door with two columns.
+		DrawUtil.rr(c, Rect2(hx + 6.0, door_y - 22.0, 22.0, 44.0), (style.roof as Color).darkened(0.05).lerp(Color("231c3c"), dusk * 0.35), 3)
+		c.draw_rect(Rect2(hx + 6.0, door_y - 22.0, 22.0, 44.0), Color(0, 0, 0, 0.22), false, 1.5)
+		for side in [-1.0, 1.0]:
+			c.draw_circle(Vector2(hx + 26.0, door_y + side * 19.0), 2.8, trim)
+	if style.deck:
+		DrawUtil.rr(c, Rect2(-hx - 30.0, -hy * 0.3, 28.0, hy * 0.6), Color("a8825a").lerp(Color("5f5870"), dusk * 0.5), 2)
+		for k in range(int(-hy * 0.3) + 4, int(hy * 0.3), 6):
+			c.draw_line(Vector2(-hx - 30.0, float(k)), Vector2(-hx - 2.0, float(k)), Color(0, 0, 0, 0.14), 1.0)
+		DrawUtil.rr(c, Rect2(-hx - 24.0, -5.0, 10.0, 10.0), Color("c9cdd2"), 5)   # table
+	if style.swing:
+		var sx := -hx - 44.0
+		c.draw_line(Vector2(sx, -hy * 0.6), Vector2(sx, -hy * 0.6 + 26.0), Color("52616f"), 3.0)
+		c.draw_line(Vector2(sx + 22.0, -hy * 0.6), Vector2(sx + 22.0, -hy * 0.6 + 26.0), Color("52616f"), 3.0)
+		c.draw_line(Vector2(sx, -hy * 0.6 + 4.0), Vector2(sx + 22.0, -hy * 0.6 + 4.0), Color("d94b45"), 3.0)
+	# Window glints on the side walls so facades are not blank.
+	for wx in [-hx * 0.5, hx * 0.1]:
+		c.draw_rect(Rect2(wx, -hy - 1.0, 14.0, 4.0), Color("a8c9d6", 0.8))
+		c.draw_rect(Rect2(wx, hy - 3.0, 14.0, 4.0), Color("a8c9d6", 0.8))
 
 
 static func _roof(c: CanvasItem, arch: int, hx: float, hy: float, roof: Color) -> void:

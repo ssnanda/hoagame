@@ -1,11 +1,12 @@
 {
   "title": "HOA PRESIDENT",
-  "subtitle": "Run the neighborhood. Survive the board.",
+  "subtitle": "Run the neighborhood. Survive the meeting.",
   "developer": "ITSpector LLC",
   "location": "North Carolina, USA",
   "partner": "Wozig",
   "partner_line": "Community management powered by Wozig",
   "partner_blurb": "Community management partner and inspiration: Wozig, the HOA and community management company.",
   "links": {"wozig": "", "privacy": "", "support": ""},
+  "intro": "Congratulations.\n\nThrough a combination of civic duty, poor attendance, and one uncontested election...\n\nyou are now HOA President.",
   "privacy": "Evidence photos are game-generated screenshots stored inside the app's own sandbox. The game never requests the device camera, uploads photos, or collects analytics."
 }

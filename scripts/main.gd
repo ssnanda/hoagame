@@ -15,15 +15,19 @@ const PortalPanel := preload("res://scripts/ui/portal_panel.gd")
 const ReinspectPanel := preload("res://scripts/ui/reinspect_panel.gd")
 const HearingPanel := preload("res://scripts/ui/hearing_panel.gd")
 const VotePanel := preload("res://scripts/ui/vote_panel.gd")
+const Career := preload("res://scripts/sim/career.gd")
+const Weather := preload("res://scripts/sim/weather.gd")
+const EncounterPanel := preload("res://scripts/ui/encounter_panel.gd")
 
 const CARD_SIZE := Vector2(600, 640)
 const UPDATE_MANIFEST_URL := "https://raw.githubusercontent.com/ssnanda/hoagame/main/altstore.json"
 const ALTSTORE_BUNDLE_ID := "com.ssnanda.hoagame"
-const WORLD_VERSION := 7
+const WORLD_VERSION := 8          ## 8: encounters, ARC memory, vendors, community mods (all optional on load)
 const STAT_LABELS := {"budget": "TREASURY", "happiness": "COMMUNITY", "power": "AUTHORITY"}
 const DOLLARS_PER_POINT := 690
 
 var sim := HoaSim.new()
+var career := Career.new()
 
 var _bars: Dictionary = {}
 var _stat_labels: Dictionary = {}
@@ -42,7 +46,13 @@ var _over_label: Label
 var _title: Control
 var _modal: Control
 var _menu_button: Button
+var _stats_button: Button
+var _details: VBoxContainer
 var _is_over := false
+var _encounter_active := false
+var _built_community := "oak_meadow"     ## community whose layout this scene was built with
+var _debug_clock := 0.0
+var _visited: Dictionary = {}     ## houses already approached today (one "visit" scene per house)
 var _active := -1
 var _grass: Array = []
 var _measurements: Dictionary = {}
@@ -57,6 +67,7 @@ var _altstore_launch_pending := false
 
 
 func _ready() -> void:
+	career.load_all()
 	_load_events()
 	_build_ui()
 	GameState.stats_changed.connect(_refresh)
@@ -65,6 +76,13 @@ func _ready() -> void:
 	sim.setup(_street.house_count())
 	_show_title()
 	_check_for_updates()
+	# A community change reloads the scene so the new layout is built; carry on where the player was heading.
+	var pending := Settings.pending_action
+	Settings.pending_action = ""
+	if pending == "new":
+		_begin(false)
+	elif pending == "continue":
+		_begin(true)
 
 
 # ---------------------------------------------------------------- title and menus
@@ -77,7 +95,8 @@ func _show_title() -> void:
 	_title = MenuPanels.title_screen(size, GameState.has_saved_run, {
 		"continue": func(): _begin(true),
 		"new_term": func(): _begin(false),
-		"howto": func(): _show_modal(MenuPanels.how_to_play(size, _close_modal)),
+		"communities": func(): _open_communities(),
+			"howto": func(): _show_modal(MenuPanels.how_to_play(size, _close_modal)),
 		"settings": func(): _show_modal(MenuPanels.settings(size, _close_modal, _reset_game)),
 		"about": func(): _show_modal(MenuPanels.about(size, _close_modal)),
 	})
@@ -86,6 +105,18 @@ func _show_title() -> void:
 
 
 func _begin(resume: bool) -> void:
+	# The street layout belongs to a community; rebuild it when the wanted one differs.
+	var wanted := _built_community
+	if resume and GameState.has_saved_run:
+		wanted = str(GameState.saved_world().get("community_id", "oak_meadow"))
+	elif not resume:
+		wanted = career.selected
+	if wanted != _built_community and Settings.pending_action == "":
+		career.selected = wanted
+		career.save()
+		Settings.pending_action = "continue" if resume else "new"
+		get_tree().reload_current_scene()
+		return
 	if is_instance_valid(_title):
 		_title.queue_free()
 		_title = null
@@ -121,15 +152,15 @@ func _reset_game() -> void:
 
 
 func _open_menu() -> void:
-	var modal := UiKit.modal(size, Vector2(560, 640), "MENU")
-	for item in [["RESUME", func(): _close_modal()], ["WOZIG PORTAL", func(): _open_portal()],
-			["HOW TO PLAY", func(): _show_modal(MenuPanels.how_to_play(size, _close_modal))],
+	var modal := UiKit.modal(size, Vector2(560, 820), "MENU")
+	for item in [["RESUME", func(): _close_modal()], ["CASE BOARD", func(): _open_portal("cases")], ["WOZIG PORTAL", func(): _open_portal()],
+			["TRAINING", func(): _show_modal(MenuPanels.how_to_play(size, _close_modal))],
 			["SETTINGS", func(): _show_modal(MenuPanels.settings(size, _close_modal, _reset_game))],
 			["TITLE SCREEN", func():
 				_close_modal()
 				_save_progress()
 				_show_title()]]:
-		var btn := UiKit.button(str(item[0]), 28, 72)
+		var btn := UiKit.button(str(item[0]), 26, 66)
 		btn.pressed.connect(func():
 			Sfx.play("tap")
 			(item[1] as Callable).call())
@@ -143,8 +174,53 @@ func _open_menu() -> void:
 	_show_modal(modal.root)
 
 
-func _open_portal() -> void:
+func _open_communities() -> void:
+	_show_modal(MenuPanels.communities(size, career, func(id: String):
+		career.selected = id
+		career.save()
+		_open_communities(), _close_modal))
+
+
+## Always-visible achievement toast, independent of overlays.
+func _toast(text: String) -> void:
+	var label := _make_label(text, 24, Color("ffd36e"), true)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("outline_size", 8)
+	label.size = Vector2(size.x - 60, 70)
+	label.position = Vector2(30, size.y * 0.16)
+	label.z_index = 90
+	add_child(label)
+	var tween := create_tween()
+	tween.tween_property(label, "modulate:a", 0.0, 1.0).set_delay(2.4)
+	tween.tween_callback(label.queue_free)
+
+
+## Notification ladder: small (quiet line), medium (toast), important (banner + sound),
+## major (large banner, stronger sound and haptic). No modal boxes for any of them.
+func _notify(level: String, text: String) -> void:
+	match level:
+		"small":
+			_float_small(text)
+		"medium":
+			_toast(text)
+		"important":
+			Sfx.play("notify")
+			_toast(text.to_upper())
+		"major":
+			Sfx.play("bad")
+			Settings.haptic(50)
+			_float(text.to_upper(), Color("ffd36e"))
+
+
+func _award(id: String) -> void:
+	if career.award(id):
+		Sfx.play("good")
+		_toast("ACHIEVEMENT · %s" % career.achievement_name(id).to_upper())
+
+
+func _open_portal(tab := "overview") -> void:
 	var portal: Panel = PortalPanel.new()
+	portal.start_tab = tab
 	portal.setup(sim, _street)
 	portal.closed.connect(_close_modal)
 	_show_modal(portal)
@@ -225,6 +301,10 @@ func _open_altstore_update() -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		# Calls, control center and swipe-away all lose focus first: save on the way out.
+		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty() and not _encounter_active:
+			_save_progress()
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		_altstore_launch_pending = false
 		if is_instance_valid(_street) and not _is_over and not sim.assignments.is_empty():
@@ -248,9 +328,26 @@ func _start() -> void:
 	_close_overlay()
 	GameState.clear_run()
 	GameState.new_game()
-	sim.new_term()
+	sim.new_term(career.current())
 	_measurements = {}
-	_new_day()
+	if Settings.tutorial_done:
+		_new_day()
+	else:
+		_show_intro()
+
+
+## One-time humorous setup, then straight into day one.
+func _show_intro() -> void:
+	_overlay.show()
+	var modal := UiKit.modal(size, Vector2(600, 620), "")
+	_overlay.add_child(modal.root)
+	modal.body.add_child(UiKit.label(str(MenuPanels.branding().get("intro", "You are now HOA President.")), 30, UiKit.INK, true))
+	var go := UiKit.button("TAKE THE GAVEL", 30, 84)
+	go.pressed.connect(func():
+		Sfx.play("good")
+		_close_overlay()
+		_new_day())
+	modal.footer.add_child(go)
 
 
 func _load_events() -> void:
@@ -269,7 +366,7 @@ func _new_day() -> void:
 	if _is_over:
 		return
 	var season := GameState.season()
-	var growth: float = [1.0, 1.15, 0.9, 0.7][season]
+	var growth: float = [1.0, 1.15, 0.9, 0.7][season] * sim.landscaper_growth()
 	_grass = []
 	for i in _street.house_count():
 		_grass.append(randf_range(2.5, 4.5) * growth)
@@ -286,6 +383,7 @@ func _new_day() -> void:
 				_grass[h] = (randf_range(6.1, 6.4) if bool(v.borderline) else randf_range(6.8, 10.0)) if bool(v.actual) else randf_range(3.5, 5.4)
 	for house in sim.discoverable:
 		visuals[int(house)] = sim.discoverable[house]
+	_visited.clear()
 	_phase = "street"
 	_evening_bonus = {}
 	_street.set_day(pins, _grass, 0, null, {}, visuals)
@@ -295,15 +393,41 @@ func _new_day() -> void:
 	_refresh()
 	_save_progress()
 	_morning_queue.clear()
-	if not (info.report as Array).is_empty():
+	var brief := _daily_brief(info)
+	if GameState.day > 1 or not brief.is_empty():
 		Sfx.play("notify")
-		_morning_queue.append(func(): _show_report("MORNING REPORT · DAY %d" % GameState.day, info.report, "CONTINUE"))
+		_morning_queue.append(func(): _show_report("%s %s" % [GameState.weekday_name(), GameState.date_text()], brief + (info.report as Array), "START THE DAY"))
 	for house in info.hearings:
 		_morning_queue.append(_run_hearing.bind(int(house)))
 	if not (info.meeting as Array).is_empty():
-		_morning_queue.append(_run_meeting.bind(info.meeting))
+		_morning_queue.append(_run_meeting.bind(info.meeting, str(info.get("meeting_title", "ANNUAL MEETING"))))
+	_morning_queue.append(_maybe_board_call)
 	_morning_queue.append(_maybe_event)
 	_next_morning_step()
+
+
+## Short morning summary: what is waiting, the forecast and the next big date.
+func _daily_brief(info: Dictionary) -> Array:
+	var lines: Array = []
+	var fresh := 0
+	var again := 0
+	for house in sim.assignments:
+		if str(sim.assignments[house].kind) == "reinspect":
+			again += 1
+		else:
+			fresh += 1
+	lines.append("%d new complaint%s" % [fresh, "" if fresh == 1 else "s"])
+	if again > 0:
+		lines.append("%d follow-up inspection%s due" % [again, "" if again == 1 else "s"])
+	if not (info.hearings as Array).is_empty():
+		lines.append("%d hearing%s tonight" % [info.hearings.size(), "" if info.hearings.size() == 1 else "s"])
+	lines.append(Weather.brief_line(Weather.for_day(GameState.day, GameState.season()), GameState.day))
+	var to_meeting := GameState.days_to_meeting(HoaSim.ANNUAL_MEETING_EVERY)
+	if to_meeting == 0:
+		lines.append("The annual meeting is today.")
+	elif to_meeting <= 3:
+		lines.append("Annual meeting in %d day%s." % [to_meeting, "" if to_meeting == 1 else "s"])
+	return lines
 
 
 func _next_morning_step() -> void:
@@ -357,9 +481,26 @@ func _resume_run() -> void:
 		_show_evening(GameState.day, _evening_bonus)
 
 
+## One consistent status line, derived from the street's own pins so it can never
+## disagree with the "Next:" chip: inspections, reinspections, or "all done".
 func _update_task() -> void:
-	var left := sim.assignments.size() - sim.completed.size()
-	_task_label.text = "%d assignment%s remaining" % [left, "" if left == 1 else "s"]
+	var fresh := 0
+	var again := 0
+	for house in _street.pins:
+		match str(_street.pins[house]):
+			"lawn", "card":
+				fresh += 1
+			"reinspect":
+				again += 1
+	if fresh + again == 0:
+		_task_label.text = "All of today's inspections are done"
+		return
+	var parts: Array = []
+	if fresh > 0:
+		parts.append("%d inspection%s" % [fresh, "" if fresh == 1 else "s"])
+	if again > 0:
+		parts.append("%d reinspection%s" % [again, "" if again == 1 else "s"])
+	_task_label.text = " · ".join(parts) + " to go"
 
 
 func _save_progress(show_feedback := false) -> void:
@@ -375,6 +516,7 @@ func _save_progress(show_feedback := false) -> void:
 		"player_position": _street.get_player_position(),
 		"cart": _street.get_cart_state(),
 		"objective": _street.objective,
+		"community_id": _built_community,
 	}
 	sim.save_into(world)
 	GameState.save_run(world)
@@ -385,8 +527,14 @@ func _save_progress(show_feedback := false) -> void:
 # ---------------------------------------------------------------- inspecting
 
 func _on_visit(house: int) -> void:
-	if _is_over or not sim.assignments.has(house) or _overlay.visible or house in sim.completed:
+	if _is_over or not sim.assignments.has(house) or _overlay.visible or house in sim.completed or _encounter_active:
 		return
+	# The resident may come out to meet you before the case sheet opens.
+	if not _visited.has(house):
+		_visited[house] = true
+		await _play_encounter(house, "visit")
+		if _is_over or _overlay.visible:
+			return
 	_active = house
 	Sfx.play("tap")
 	Settings.haptic(15)
@@ -478,12 +626,25 @@ func _open_case_sheet(house: int) -> void:
 		"repeat_count": property.get("repeat_count", 0), "lot_type": _street.lot_kind(house), "blurb": blurb, "history": history,
 		"source": str(a.get("complainant", sim.violations.source_label(source))), "text": str(a.get("text", "")),
 		"reliability": "Source reliability: %s" % _reliability_word(sim.violations.source_reliability(source)),
+		"next": _next_step_text(house, a),
 		"photos": photos, "quality": quality, "shots": (evidence.get("photos", []) as Array).size(), "observations": notes,
 		"violations": rows, "options_for": func(cited: Array) -> Dictionary: return sim.ruling_options(house, cited, evidence),
 	})
 	case_file.ruled.connect(_on_case_ruled)
 	_overlay.add_child(case_file)
 	case_file.position = ((size - CASE_FILE_SCRIPT.PANEL_SIZE) / 2.0).max(Vector2(8, 8))
+
+
+## One line for the case sheet: what the player should do next with this property.
+func _next_step_text(house: int, a: Dictionary) -> String:
+	var record: Dictionary = sim.cases.get(house, {})
+	if str(a.get("source", "")) == "arc":
+		return "Compare the work with what was approved."
+	if str(record.get("state", "")) in HoaSim.OPEN_STATES and int(record.get("cure_due", 0)) > GameState.day:
+		return "A notice is already open; cure deadline day %d." % int(record.cure_due)
+	if (_street.get_evidence().get(house, {}) as Dictionary).is_empty():
+		return "Photograph the property, then decide."
+	return "Tick what the evidence supports, then decide."
 
 
 func _reliability_word(value: float) -> String:
@@ -498,14 +659,26 @@ func _on_case_ruled(action: String, cited: Array) -> void:
 	var house := _active
 	var result := sim.rule_case(house, action, cited, _evidence_for(house))
 	_apply_result(result, "%s · %s" % ["Fine" if action == "fine" else ("Wrongful citation" if not bool(result.correct) else "Enforcement"), _street.lot_address(house)])
+	_notify("important" if action in ["hearing", "fine"] else "medium",
+			{"dismiss": "Complaint dismissed", "warning": "Warning issued", "hearing": "Hearing scheduled", "fine": "Fine issued"}.get(action, "Ruling recorded"))
+	if action == "fine" and bool(result.correct):
+		career.bump("fines")
+		_award("first_fine")
+		if "tall_grass" in cited:
+			_award("not_on_my_lawn")
+	await _play_encounter(house, action)
 	_finish_case(house)
 
 
 func _on_reinspection_choice(choice: String) -> void:
 	var house := _active
+	var had_warning := str(sim.cases.get(house, {}).get("action", "")) == "warning"
 	var result := sim.resolve_reinspection(house, choice)
 	result.correct = true
+	if choice == "close" and had_warning:
+		_award("due_process")
 	_apply_result(result, "Reinspection · %s" % _street.lot_address(house))
+	await _play_encounter(house, "reinspect")
 	_finish_case(house)
 
 
@@ -519,6 +692,57 @@ func _apply_result(result: Dictionary, label := "Case ruling") -> void:
 	_float("%+d" % gained, Color("7ee081") if gained >= 0 else Color("ff6b5a"))
 	Sfx.play("good" if gained >= 0 else "bad")
 	Settings.haptic(30 if gained >= 0 else 45)
+
+
+## Close-up encounter after a ruling: camera pushes toward the door, the resident comes
+## out, the player answers, and the outcome is applied exactly once.
+func _play_encounter(house: int, trigger: String) -> void:
+	if _is_over:
+		return
+	var enc := sim.pick_encounter(house, trigger, GameState.season())
+	if enc.is_empty():
+		return
+	if str(enc.id) == "slapstick_blanket":
+		_award("slapstick")
+	if DisplayServer.get_name() == "headless":
+		# Test runs have no one to answer: take the first reply so bots never stall.
+		sim.apply_encounter_outcome(house, enc, (enc.choices as Array)[0], _street.lot_address(house))
+		return
+	_encounter_active = true
+	Sfx.set_mood("absurd" if str(enc.get("tone", "")) in ["slapstick", "comic"] else ("tense" if str(enc.get("tone", "")) in ["angry", "tense"] else "calm"))
+	Sfx.play("door")
+	_street.begin_cinematic(house)
+	await get_tree().create_timer(0.9 if not Settings.reduce_motion else 0.2).timeout
+	if _is_over:
+		_street.end_cinematic()
+		_encounter_active = false
+		return
+	var styles: Array = _street.world_view.styles()
+	var style: Dictionary = styles[house] if house < styles.size() else {}
+	var panel := EncounterPanel.new()
+	panel.size = size
+	panel.setup(enc, sim.owner_of(house), _street.lot_address(house), house * 7 + 3,
+			style.get("wall", Color("d9c7a3")), style.get("roof", Color("7a4b3a")), {"favored": sim.favored_name(house)})
+	panel.modulate.a = 0.0
+	add_child(panel)
+	create_tween().tween_property(panel, "modulate:a", 1.0, 0.35)
+	var choice: Dictionary = await panel.finished
+	var fade := create_tween()
+	fade.tween_property(panel, "modulate:a", 0.0, 0.3)
+	await fade.finished
+	panel.queue_free()
+	var applied := sim.apply_encounter_outcome(house, enc, choice, _street.lot_address(house))
+	if float(applied.slow) > 0.0:
+		_street.apply_slow(float(applied.slow))
+		_float_small("SLOWED DOWN FOR A WHILE")
+	if int(applied.score) != 0:
+		GameState.add_score(int(applied.score))
+	if str(enc.get("footer", "")) != "":
+		_float_small(str(enc.footer).capitalize())
+	_street.end_cinematic()
+	_encounter_active = false
+	Sfx.set_mood("calm")
+	_refresh()
 
 
 func _finish_case(house: int) -> void:
@@ -556,6 +780,8 @@ func _on_photo(_house: int, quality: int, usable: bool, documented: Array) -> vo
 		return
 	Sfx.play("shutter")
 	Settings.haptic(25)
+	if career.bump("photos") >= 25:
+		_award("paparazzi")
 	GameState.add_score(10 + 15 * documented.size() + (10 if quality >= 80 else 0))
 	_save_progress(true)
 
@@ -569,11 +795,15 @@ func _run_hearing(house: int) -> void:
 	info.address = _street.lot_address(house)
 	_overlay.show()
 	Sfx.set_loop("murmur", 0.8)
+	Sfx.set_mood("tense")
 	var panel: Panel = HearingPanel.new()
 	panel.setup(info)
 	panel.decided.connect(func(recommendation: String, present: bool):
 		_close_overlay()
 		var result := sim.hold_hearing(house, recommendation, present)
+		Settings.haptic(45)
+		if sim.board.tally(result.votes) == 3:
+			_award("unanimous_ish")
 		sim.apply_effects("Hearing · %s" % _street.lot_address(house), result.effects)
 		GameState.add_score(40)
 		_street.set_case_states(sim.case_states())
@@ -587,32 +817,72 @@ func _run_hearing(house: int) -> void:
 	_overlay.add_child(panel)
 
 
-func _run_meeting(votes: Array) -> void:
+func _run_meeting(votes: Array, title := "ANNUAL MEETING") -> void:
 	var retain := sim.board.tally(votes)
+	Settings.haptic(60)
 	var lines: Array = ["%d of %d members vote to retain you." % [retain, votes.size()]]
 	var ousted := retain * 2 <= votes.size()
+	var term_done := false
 	if ousted:
 		lines.append("You have been voted out.")
 	else:
 		var bonus := GameState.add_score(150)
 		sim.board.shift(sim.politics, 4)
 		lines.append("Re-elected! +%d points." % bonus)
+		# Third annual meeting survived: the term is complete (once per term).
+		if title == "ANNUAL MEETING" and GameState.day / HoaSim.ANNUAL_MEETING_EVERY >= Career.TERM_MEETINGS \
+				and not bool(sim.politics.get("term_done", false)):
+			sim.politics.term_done = true
+			term_done = true
 	_overlay.show()
 	Sfx.set_loop("murmur", 0.8)
+	Sfx.set_mood("tense" if ousted or retain * 2 <= votes.size() + 1 else "triumph")
 	var panel: Panel = VotePanel.new()
-	panel.setup("ANNUAL MEETING", lines, votes, "CONTINUE")
+	panel.setup(title, lines, votes, "CONTINUE")
 	panel.closed.connect(func():
 		_close_overlay()
 		if ousted:
 			GameState.force_end("Voted out at the annual meeting. Recount denied.")
+		elif term_done:
+			_show_term_complete()
 		else:
 			_next_morning_step())
 	_overlay.add_child(panel)
 
 
+## A full term survived: rating, unlock progress, and the choice to keep governing.
+func _show_term_complete() -> void:
+	var support := sim.board_support()
+	var rating := career.record_term(int(GameState.stats.power), int(GameState.stats.happiness), int(GameState.stats.budget), support, sim.legal_risk())
+	_award("term_complete")
+	_overlay.show()
+	var modal := UiKit.modal(size, Vector2(620, 600), "TERM COMPLETE")
+	_overlay.add_child(modal.root)
+	modal.body.add_child(UiKit.label("%s survived %d annual meetings." % [sim.community_name, Career.TERM_MEETINGS], 26, UiKit.INK, true))
+	modal.body.add_child(UiKit.label("Governance rating  %d / 100" % rating, 34, UiKit.GOOD, true))
+	var unlocked: Array = []
+	for c: Dictionary in career.communities:
+		if int(c.get("unlock", {}).get("terms", 0)) == career.terms_completed:
+			unlocked.append(str(c.name))
+	if not unlocked.is_empty():
+		modal.body.add_child(UiKit.label("New community unlocked: %s" % ", ".join(unlocked), 24, UiKit.ACCENT, true))
+	modal.body.add_child(UiKit.label("Keep governing for a higher score, or start a new term somewhere harder from the title screen.", 18, UiKit.MUTED, true))
+	var go := UiKit.button("KEEP GOVERNING", 28, 80)
+	go.pressed.connect(func():
+		_close_overlay()
+		_next_morning_step())
+	modal.footer.add_child(go)
+	var title := UiKit.button("TITLE SCREEN", 24, 66)
+	title.pressed.connect(func():
+		_close_overlay()
+		_save_progress()
+		_show_title())
+	modal.footer.add_child(title)
+
+
 func _show_report(title: String, lines: Array, button_text: String) -> void:
 	_overlay.show()
-	var modal := UiKit.modal(size, Vector2(620, 860), title)
+	var modal := UiKit.modal(size, Vector2(620, clampf(300.0 + 46.0 * lines.size(), 420.0, 860.0)), title)
 	_overlay.add_child(modal.root)
 	for line in lines:
 		modal.body.add_child(UiKit.label("• %s" % str(line), 22, UiKit.INK))
@@ -623,15 +893,53 @@ func _show_report(title: String, lines: Array, button_text: String) -> void:
 	modal.footer.add_child(btn)
 
 
+## A director phones with a request. Complying is tempting; consistency is remembered.
+func _maybe_board_call() -> void:
+	if _is_over or _overlay.visible:
+		_next_morning_step()
+		return
+	var call := sim.pick_board_call(GameState.day)
+	if call.is_empty():
+		_next_morning_step()
+		return
+	var text := str(call.text).replace("{who}", str(call.who_name)).replace("{owner}", sim.owner_of(int(call.house))) \
+			.replace("{address}", _street.lot_address(int(call.house)))
+	_overlay.show()
+	Sfx.play("notify")
+	var modal := UiKit.modal(size, Vector2(620, 540), "INCOMING CALL")
+	_overlay.add_child(modal.root)
+	modal.body.add_child(UiKit.label(str(Board.member(int(call.member_index)).temperament), 18, UiKit.MUTED, true))
+	modal.body.add_child(UiKit.label(text, 26, UiKit.INK))
+	for choice: Dictionary in call.choices:
+		var btn := UiKit.button(str(choice.label), 24, 76)
+		btn.pressed.connect(func():
+			Sfx.play("tap")
+			var line := sim.apply_board_call(call, choice)
+			_close_overlay()
+			_refresh()
+			_float_small(line)
+			_next_morning_step())
+		modal.footer.add_child(btn)
+
+
 ## One agenda item (architectural request, assessment, vendor bid, project, politics, drama).
 func _maybe_event() -> void:
 	if _is_over or GameState.day <= 1 or _events.is_empty() or randf() > 0.5 or _overlay.visible:
 		return
 	if GameState.day % HoaSim.ANNUAL_MEETING_EVERY == 0:
 		return
-	var event: Dictionary = (_events[randi() % _events.size()] as Dictionary).duplicate(true)
+	# Complexity arrives gradually: vendors, politics and legal items wait for later days.
+	var min_day := {"architectural": 2, "assessment": 3, "vendor": 4, "project": 3, "politics": 5, "insurance": 6, "reserve": 6, "legal": 7}
+	var eligible: Array = []
+	for e: Dictionary in _events:
+		if GameState.day >= int(min_day.get(str(e.get("category", "")), 2)):
+			eligible.append(e)
+	if eligible.is_empty():
+		return
+	var event: Dictionary = (eligible[randi() % eligible.size()] as Dictionary).duplicate(true)
 	var house: int = randi() % _street.house_count()
 	event.who = str(event.who).replace("{owner}", sim.owner_of(house)).replace("{address}", _street.lot_address(house))
+	event.house = house
 	_overlay.show()
 	_card = CARD_SCENE.instantiate()
 	_card.size = CARD_SIZE
@@ -647,6 +955,13 @@ func _on_event_swiped(side: String) -> void:
 	var choice: Dictionary = data.get(side, {})
 	var effects: Dictionary = choice.get("effects", {})
 	sim.apply_political(effects)
+	if choice.has("vendor"):
+		sim.apply_vendor(choice.vendor)
+	if choice.has("policy"):
+		sim.apply_policy(choice.policy)
+	if choice.has("arc") and data.has("house"):
+		# Approved work is remembered; a later complaint asks whether it was built as approved.
+		sim.register_arc(int(data.house), choice.arc)
 	if choice.has("project"):
 		sim.projects.append((choice.project as Dictionary).duplicate(true))
 	sim.record_agenda(str(data.get("who", "Agenda")), str(choice.get("label", side)))
@@ -673,7 +988,7 @@ func _evening() -> void:
 
 func _show_evening(finished: int, bonus: Dictionary) -> void:
 	_overlay.show()
-	var modal := UiKit.modal(size, Vector2(600, 700), "DAY %d COMPLETE" % finished)
+	var modal := UiKit.modal(size, Vector2(600, 560), "DAY %d COMPLETE" % finished)
 	_overlay.add_child(modal.root)
 	var body: VBoxContainer = modal.body
 	body.add_child(UiKit.label("Day bonus  +%d" % int(bonus.day_bonus), 30))
@@ -696,6 +1011,7 @@ func _show_evening(finished: int, bonus: Dictionary) -> void:
 
 func _close_overlay() -> void:
 	Sfx.set_loop("murmur", 0.0)
+	Sfx.set_mood("calm")
 	for child in _overlay.get_children():
 		child.queue_free()
 	_card = null
@@ -726,6 +1042,17 @@ func _refresh() -> void:
 	_day_label.text = "DAY %d" % GameState.day
 	_score_label.text = "SCORE %s" % _commas(GameState.score) + ("  x%d" % GameState.streak if GameState.streak > 1 else "")
 	_best_label.text = "BEST %s" % _commas(GameState.best)
+	var alarm := false
+	for key in GameState.STAT_KEYS:
+		var v: int = GameState.stats[key]
+		alarm = alarm or v <= 20 or v >= 80
+	if sim.politics.size() > 0 and (sim.board_support() < 35 or sim.legal_risk() > 65):
+		alarm = true
+	_stats_button.text = "STATS !" if alarm else "STATS"
+	if int(GameState.stats.get("happiness", 50)) <= 10:
+		_award("everyone_hates_me")
+	_version_label.text = "%s · v%s" % [sim.community_name, str(ProjectSettings.get_setting("application/config/version", "dev"))]
+	_stats_button.add_theme_color_override("font_color", Color("ff8a7a") if alarm else Color.WHITE)
 	for key in _bars:
 		var bar: ProgressBar = _bars[key]
 		var value: int = GameState.stats[key]
@@ -738,7 +1065,7 @@ func _refresh() -> void:
 	if sim.politics.is_empty():
 		_politics_label.text = ""
 	else:
-		_politics_label.text = "BOARD %d%% · LEGAL RISK %d%%" % [sim.board_support(), sim.legal_risk()]
+		_politics_label.text = "MOOD: %s · COUNSEL: %s" % [sim.board.outlook(sim.politics, GameState.stats, GameState.day), sim.board.counsel_mood(sim.politics)]
 
 
 func _float(text: String, color: Color) -> void:
@@ -774,6 +1101,15 @@ func _process(_delta: float) -> void:
 	if not is_instance_valid(_street) or _street.house_count() == 0:
 		return
 	_street.warm_up = _overlay.visible or is_instance_valid(_title) or is_instance_valid(_modal)
+	if _street.debug_view and OS.is_debug_build():
+		_debug_clock -= _delta
+		if _debug_clock <= 0.0:
+			_debug_clock = 1.0
+			_street.debug_labels.clear()
+			for house in sim.properties:
+				var p: Dictionary = sim.properties[house]
+				_street.debug_labels[int(house)] = "%s %s rel%d %s" % [str(p.owner), ",".join(p.get("traits", [])), int(p.get("relationship", 0)),
+						str(sim.cases.get(house, {}).get("state", ""))]
 	_update_hint()
 
 
@@ -785,15 +1121,21 @@ func _update_hint() -> void:
 	var hint := ""
 	var target: int = _street.objective
 	if not _street.used:
-		hint = "Drag anywhere to walk"
+		hint = "Drag anywhere to walk · pinch to zoom"
+	elif target < 0 and not sim.completed.is_empty():
+		hint = "Good work. Warnings start a cure period; you'll be back to reinspect."
 	elif target >= 0 and _street.near != target:
-		hint = "Walk to the gold pin: %s" % _street.lot_address(target)
+		var gap: float = _street.player.position.distance_to(_street.hood.lots[target].driveway_mid())
+		if gap > 450.0:
+			hint = "Walk to the gold pin: %s" % _street.lot_address(target)
+		else:
+			hint = "Approach the mailbox at %s" % _street.lot_address(target)
 	elif target >= 0 and not _street.get_evidence().has(target) and not _street.camera_ev.active:
 		hint = "Tap the camera to photograph the property"
 	elif target >= 0 and _street.camera_ev.active:
-		hint = "Center the house and take the photo"
+		hint = "Center the house, then tap the shutter"
 	elif target >= 0:
-		hint = "Tap INSPECT PROPERTY to open the case"
+		hint = "Tap INSPECT PROPERTY to open the case sheet"
 	_street.set_hint(hint)
 
 
@@ -814,21 +1156,44 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	var info := HBoxContainer.new()
+	info.add_theme_constant_override("separation", 10)
 	vbox.add_child(info)
-	_day_label = _make_label("DAY 1", 28, Color.WHITE)
-	_day_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_day_label = _make_label("DAY 1", 26, Color.WHITE)
+	_day_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_day_label.custom_minimum_size = Vector2(110, 0)
+	_day_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	info.add_child(_day_label)
-	_score_label = _make_label("SCORE 0", 28, Color("ffd36e"), true)
+	_score_label = _make_label("SCORE 0", 26, Color("ffd36e"), true)
 	_score_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_score_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_score_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	info.add_child(_score_label)
-	_best_label = _make_label("BEST 0", 28, Color.WHITE)
-	_best_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	info.add_child(_best_label)
+	_stats_button = Button.new()
+	_stats_button.text = "STATS"
+	_stats_button.custom_minimum_size = Vector2(104, 48)
+	_stats_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_stats_button.add_theme_font_size_override("font_size", 18)
+	_stats_button.pressed.connect(func():
+		Sfx.play("tap")
+		_details.visible = not _details.visible)
+	info.add_child(_stats_button)
+	_menu_button = Button.new()
+	_menu_button.text = "MENU"
+	_menu_button.custom_minimum_size = Vector2(104, 48)
+	_menu_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_menu_button.add_theme_font_size_override("font_size", 18)
+	_menu_button.pressed.connect(func():
+		Sfx.play("tap")
+		_open_menu())
+	info.add_child(_menu_button)
+	# Secondary information: collapsed by default so the neighborhood stays dominant.
+	_details = VBoxContainer.new()
+	_details.add_theme_constant_override("separation", 6)
+	_details.visible = false
+	vbox.add_child(_details)
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 14)
-	vbox.add_child(stats_row)
+	_details.add_child(stats_row)
 	for key in GameState.STAT_KEYS:
 		var col := VBoxContainer.new()
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -845,26 +1210,22 @@ func _build_ui() -> void:
 		_bars[key] = bar
 	var meta := HBoxContainer.new()
 	meta.add_theme_constant_override("separation", 10)
-	vbox.add_child(meta)
-	_menu_button = Button.new()
-	_menu_button.text = "MENU"
-	_menu_button.custom_minimum_size = Vector2(96, 40)
-	_menu_button.add_theme_font_size_override("font_size", 18)
-	_menu_button.pressed.connect(func():
-		Sfx.play("tap")
-		_open_menu())
-	meta.add_child(_menu_button)
+	_details.add_child(meta)
 	_politics_label = _make_label("", 17, Color("ffd36e"), true)
 	_politics_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_politics_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meta.add_child(_politics_label)
+	_best_label = _make_label("BEST 0", 16, Color("b9d8e8"))
+	_best_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	meta.add_child(_best_label)
 	var version := str(ProjectSettings.get_setting("application/config/version", "dev"))
 	_version_label = _make_label("v%s" % version, 16, Color("b9d8e8"), false)
 	_version_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	meta.add_child(_version_label)
 	_street = Control.new()
 	_street.set_script(STREET_SCRIPT)
+	_street.world_seed = int(career.current().get("seed", 7771))
+	_built_community = str(career.current().get("id", "oak_meadow"))
 	_street.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_street.visit.connect(_on_visit)
 	_street.photo_taken.connect(_on_photo)

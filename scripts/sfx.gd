@@ -7,8 +7,11 @@ const RATE := 22050
 var _players: Array = []
 var _bank: Dictionary = {}
 var _music: AudioStreamPlayer
+var _mood := "calm"
+var _pads: Dictionary = {}
+var _mood_tween: Tween
 var _loops: Dictionary = {}
-const LOOP_DB := {"hum": -20.0, "traffic": -22.0, "blower": -20.0, "sprinkler": -24.0, "murmur": -23.0}
+const LOOP_DB := {"hum": -20.0, "traffic": -22.0, "blower": -20.0, "sprinkler": -24.0, "murmur": -23.0, "rain": -24.0, "wind": -26.0}
 
 
 func _ready() -> void:
@@ -26,9 +29,11 @@ func _ready() -> void:
 		"step": _noise(0.03, 0.18),
 		"bark": _bark(),
 		"chirp": _chirp(),
+		"thunder": _thunder(),
+		"door": _door(),
 	}
 	var loop_banks := {"hum": _periodic([92.0, 184.0, 276.0], [1.0, 0.5, 0.25], 1.0), "traffic": _rumble(),
-			"blower": _buzz(), "sprinkler": _sprinkler(), "murmur": _murmur()}
+			"blower": _buzz(), "sprinkler": _sprinkler(), "murmur": _murmur(), "rain": _rain(), "wind": _wind()}
 	for key in loop_banks:
 		var p := AudioStreamPlayer.new()
 		p.stream = loop_banks[key]
@@ -37,13 +42,32 @@ func _ready() -> void:
 		p.play()
 		_loops[key] = p
 	_music = AudioStreamPlayer.new()
-	_music.stream = _pad()
+	_pads = {"calm": _pad(), "tense": _pad_tense(), "absurd": _pad_absurd(), "triumph": _pad_triumph()}
+	_music.stream = _pads.calm
 	_music.volume_db = -22.0
 	add_child(_music)
 	apply_settings()
 
 
+## Context music: calm (neighborhood), tense (hearings, meetings), absurd (comic scenes), triumph.
+func set_mood(mood: String) -> void:
+	if mood == _mood or not _pads.has(mood) or _music == null:
+		return
+	_mood = mood
+	if _mood_tween != null:
+		_mood_tween.kill()
+	var target := -22.0 + linear_to_db(maxf(Settings.music_volume, 0.01))
+	_mood_tween = create_tween()
+	_mood_tween.tween_property(_music, "volume_db", -60.0, 0.35)
+	_mood_tween.tween_callback(func():
+		_music.stream = _pads[_mood]
+		if Settings.music:
+			_music.play())
+	_mood_tween.tween_property(_music, "volume_db", target, 0.6)
+
+
 func apply_settings() -> void:
+	_music.volume_db = -22.0 + linear_to_db(maxf(Settings.music_volume, 0.01))
 	if Settings.music and not _music.playing:
 		_music.play()
 	elif not Settings.music:
@@ -55,6 +79,7 @@ func set_loop(name: String, level: float) -> void:
 	if not _loops.has(name):
 		return
 	var p: AudioStreamPlayer = _loops[name]
+	level *= Settings.sfx_volume
 	var on := Settings.sound and level > 0.02
 	var target := lerpf(-60.0, float(LOOP_DB[name]), clampf(level, 0.0, 1.0)) if on else -80.0
 	p.volume_db = lerpf(p.volume_db, target, 0.35)
@@ -68,6 +93,7 @@ func play(name: String) -> void:
 	for p: AudioStreamPlayer in _players:
 		if not p.playing:
 			p.stream = _bank[name]
+			p.volume_db = -8.0 + linear_to_db(maxf(Settings.sfx_volume, 0.01))
 			p.play()
 			return
 
@@ -208,3 +234,86 @@ func _chirp() -> AudioStreamWAV:
 		var f := 2600.0 + 1100.0 * t
 		s[i] = sin(TAU * f * float(i) / RATE) * sin(PI * t) * 0.25
 	return _wav(s)
+
+
+func _rain() -> AudioStreamWAV:
+	var n := int(RATE * 1.5)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var last := 0.0
+	for i in n:
+		last = lerpf(last, rng.randf_range(-1.0, 1.0), 0.55)   # softened hiss
+		s[i] = last * 0.3
+	return _wav(s, true)
+
+
+func _wind() -> AudioStreamWAV:
+	var n := int(RATE * 3.0)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 33
+	var last := 0.0
+	for i in n:
+		last = lerpf(last, rng.randf_range(-1.0, 1.0), 0.06)
+		var swell := 0.55 + 0.45 * sin(TAU * float(i) / n)   # loops cleanly: one swell per cycle
+		s[i] = last * swell * 1.3
+	return _wav(s, true)
+
+
+func _thunder() -> AudioStreamWAV:
+	var n := int(RATE * 1.6)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var last := 0.0
+	for i in n:
+		var t := float(i) / n
+		last = lerpf(last, rng.randf_range(-1.0, 1.0), 0.04)
+		s[i] = last * pow(1.0 - t, 1.6) * 1.8 * (1.0 if t > 0.03 else t / 0.03)
+	return _wav(s)
+
+
+func _door() -> AudioStreamWAV:
+	var n := int(RATE * 0.22)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var knock := 0.0
+		for start in [0.0, 0.1]:
+			var local := t - float(start)
+			if local >= 0.0 and local < 0.08:
+				knock += sin(TAU * 140.0 * local) * exp(-local * 60.0)
+		s[i] = knock * 0.6
+	return _wav(s)
+
+
+func _chord_pad(freqs: Array, amps: Array, seconds: float, trem_hz: float, vib: float) -> AudioStreamWAV:
+	var n := int(RATE * seconds)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var v := 0.0
+		for k in freqs.size():
+			var f: float = freqs[k]
+			v += sin(TAU * f * t + vib * sin(TAU * 4.0 * t)) * float(amps[k])
+		# Whole-number tremolo rate over the loop length keeps the loop seamless.
+		s[i] = v * 0.08 * (0.8 + 0.2 * sin(TAU * trem_hz * t))
+	return _wav(s, true)
+
+
+func _pad_tense() -> AudioStreamWAV:
+	return _chord_pad([164.0, 196.0, 233.0, 98.0], [0.9, 0.8, 0.6, 0.7], 6.0, 0.5, 0.0)
+
+
+func _pad_absurd() -> AudioStreamWAV:
+	return _chord_pad([261.0, 329.0, 392.0, 523.0], [0.7, 0.7, 0.6, 0.4], 6.0, 2.0, 0.6)
+
+
+func _pad_triumph() -> AudioStreamWAV:
+	return _chord_pad([261.0, 329.0, 392.0, 523.0, 659.0], [0.8, 0.8, 0.7, 0.5, 0.3], 6.0, 0.5, 0.0)

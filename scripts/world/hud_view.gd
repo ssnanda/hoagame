@@ -5,6 +5,7 @@ extends Control
 
 const Neighborhood := preload("res://scripts/world/neighborhood.gd")
 const LotScript := preload("res://scripts/world/lot.gd")
+const Weather := preload("res://scripts/sim/weather.gd")
 const DrawUtil := preload("res://scripts/world/draw_util.gd")
 const EvidenceCamera := preload("res://scripts/world/evidence_camera.gd")
 
@@ -22,6 +23,7 @@ var gallery_open := false
 var gallery_page := 0
 var gallery_sel := -1
 var prompt_rect := Rect2()
+var next_rect := Rect2()
 var _mini: Control
 var _mini_origin := Vector2.ZERO
 var _mini_roads: Array = []
@@ -128,6 +130,9 @@ func handle_tap(pos: Vector2) -> bool:
 	if prompt_rect.has_point(pos):
 		ctx.inspect_near()
 		return true
+	if next_rect.has_point(pos):
+		ctx.cycle_objective()
+		return true
 	if pos.distance_to(Vector2(w - 66.0, h - 172.0)) <= 38.0:
 		gallery_open = true
 		gallery_page = 0
@@ -136,10 +141,17 @@ func handle_tap(pos: Vector2) -> bool:
 	if pos.distance_to(Vector2(w - 66.0, h - 262.0)) <= 38.0:
 		ctx.toggle_cart()
 		return true
+	if absf(float(ctx.user_zoom) - 1.0) > 0.05 and zoom_reset_rect().has_point(pos):
+		ctx.reset_zoom()
+		return true
 	if minimap_rect().grow(8.0).has_point(pos):
 		open_map()
 		return true
 	return false
+
+
+func zoom_reset_rect() -> Rect2:
+	return Rect2(14.0, 92.0, 112.0, 48.0)
 
 
 func handle_drag(delta: Vector2) -> void:
@@ -214,11 +226,12 @@ func _draw_ui() -> void:
 	var font := ThemeDB.fallback_font
 	var player = ctx.player
 	# Clock / season chip.
-	var clock := "%s · %s" % [GameState.weekday_name(), GameState.season_name()]
+	var clock := "%s · %s · %s" % [GameState.weekday_name(), GameState.date_text(), Weather.name_of(int(ctx.weather))]
 	var clock_size := font.get_string_size(clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 20)
 	DrawUtil.rr(self, Rect2(14.0, 14.0, clock_size.x + 24.0, 34.0), Color(0, 0, 0, 0.5), 10)
 	draw_string(font, Vector2(26.0, 38.0), clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("ffd36e"))
 	# Next destination.
+	next_rect = Rect2()
 	var objective: int = ctx.objective
 	if objective >= 0 and ctx.pins.get(objective, "") in ACTIVE_KINDS:
 		var lot: LotScript = ctx.hood.lots[objective]
@@ -226,8 +239,13 @@ func _draw_ui() -> void:
 		var text := "Next: %s · %d ft" % [lot.address, feet]
 		var ts := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
 		var box := Rect2(14.0, 54.0, minf(ts.x + 24.0, w - MINI_SIZE.x - 44.0), 30.0)
+		next_rect = box.grow(6.0)
 		DrawUtil.rr(self, box, Color(0, 0, 0, 0.5), 10)
 		draw_string(font, box.position + Vector2(12.0, 21.0), text, HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 20.0, 18, Color.WHITE)
+	if absf(float(ctx.user_zoom) - 1.0) > 0.05 and not ctx.camera_ev.active:
+		var zr := zoom_reset_rect()
+		DrawUtil.rr(self, zr, Color(0, 0, 0, 0.5), 10)
+		draw_string(font, zr.position + Vector2(0.0, 31.0), "RESET ZOOM", HORIZONTAL_ALIGNMENT_CENTER, zr.size.x, 16, Color.WHITE)
 	if str(ctx.hint) != "":
 		var hs := font.get_string_size(ctx.hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
 		var hbox := Rect2((w - hs.x) * 0.5 - 16.0, h * 0.22, hs.x + 32.0, 46.0)
@@ -274,7 +292,7 @@ func _draw_ui() -> void:
 			status = "REINSPECTION REQUIRED" if kind == "reinspect" else "COMPLAINT PENDING"
 			label = "REINSPECT" if kind == "reinspect" else "INSPECT PROPERTY"
 		elif spotted:
-			status = "POSSIBLE VIOLATION OBSERVED"
+			status = "SOMETHING CATCHES YOUR EYE"
 			label = "OPEN CASE"
 		elif kind == "done":
 			status = "INSPECTION COMPLETE"
@@ -394,7 +412,7 @@ func _draw_minimap() -> void:
 		var kind: String = ctx.pins.get(lot.id, "")
 		var status: String = ctx.case_states.get(lot.id, "")
 		if kind in ACTIVE_KINDS or status != "":
-			var col := Color("ffd36e") if kind in ACTIVE_KINDS else Color("9aa4b2")
+			var col := (Color("71b9dc") if kind == "reinspect" else Color("ffd36e")) if kind in ACTIVE_KINDS else Color("9aa4b2")
 			_mini.draw_circle(to_map.call(lot.center), 3.0, col)
 	var objective: int = ctx.objective
 	if objective >= 0 and ctx.pins.get(objective, "") in ACTIVE_KINDS:

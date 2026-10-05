@@ -1,0 +1,110 @@
+[
+  {
+    "id": "oak_meadow",
+    "name": "Oak Meadow",
+    "kind": "Starter subdivision",
+    "blurb": "A friendly new-build subdivision. Mostly reasonable neighbors, mostly tall grass.",
+    "unlock": {
+      "terms": 0
+    },
+    "mods": {
+      "hostility": 0,
+      "complaints_bonus": 0,
+      "reliability_mult": 1.0,
+      "dues": 1,
+      "board_bias": 0,
+      "legal_start": 10
+    },
+    "seed": 7771
+  },
+  {
+    "id": "heritage_square",
+    "name": "Heritage Square",
+    "kind": "Older established HOA",
+    "blurb": "Forty-year-old oaks, forty-year-old grudges. Longtime residents expect tradition.",
+    "unlock": {
+      "terms": 1
+    },
+    "mods": {
+      "hostility": -8,
+      "complaints_bonus": 1,
+      "reliability_mult": 0.95,
+      "dues": 1,
+      "board_bias": -3,
+      "legal_start": 14
+    },
+    "seed": 1957
+  },
+  {
+    "id": "brookside_towns",
+    "name": "Brookside Townhomes",
+    "kind": "Townhome community",
+    "blurb": "Shared walls, shared driveways, shared opinions. Parking is a blood sport.",
+    "unlock": {
+      "terms": 2
+    },
+    "mods": {
+      "hostility": -10,
+      "complaints_bonus": 1,
+      "reliability_mult": 0.9,
+      "dues": 0,
+      "board_bias": -4,
+      "legal_start": 16
+    },
+    "seed": 2603
+  },
+  {
+    "id": "the_preserve",
+    "name": "The Preserve",
+    "kind": "Upscale community",
+    "blurb": "High dues, higher expectations, and a lawyer on speed dial. Perfection or paperwork.",
+    "unlock": {
+      "terms": 3
+    },
+    "mods": {
+      "hostility": -14,
+      "complaints_bonus": 1,
+      "reliability_mult": 0.88,
+      "dues": 2,
+      "board_bias": -5,
+      "legal_start": 24
+    },
+    "seed": 3187
+  },
+  {
+    "id": "ironwood_gates",
+    "name": "Ironwood Gates",
+    "kind": "Gated community",
+    "blurb": "A guard booth, a rulebook, and a very exclusive pool schedule.",
+    "unlock": {
+      "terms": 4
+    },
+    "mods": {
+      "hostility": -16,
+      "complaints_bonus": 2,
+      "reliability_mult": 0.85,
+      "dues": 2,
+      "board_bias": -6,
+      "legal_start": 28
+    },
+    "seed": 4421
+  },
+  {
+    "id": "grand_lakes",
+    "name": "Grand Lakes",
+    "kind": "Master-planned association",
+    "blurb": "Six thousand homes, four committees, one extremely detailed rulebook.",
+    "unlock": {
+      "terms": 5
+    },
+    "mods": {
+      "hostility": -18,
+      "complaints_bonus": 3,
+      "reliability_mult": 0.82,
+      "dues": 3,
+      "board_bias": -8,
+      "legal_start": 32
+    },
+    "seed": 5309
+  }
+]

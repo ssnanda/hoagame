@@ -65,6 +65,9 @@ func save_run(world: Dictionary) -> void:
 	_save_best()
 	has_saved_run = true
 	_saved_world = world.duplicate(true)
+	# Keep the previous good save as a backup before overwriting: never lose a run to a bad write.
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.copy_absolute(SAVE_PATH, SAVE_PATH + ".bak")
 	var cfg := ConfigFile.new()
 	cfg.load(SAVE_PATH)
 	cfg.set_value("score", "best", best)
@@ -166,6 +169,32 @@ func season_name() -> String:
 ## 0 = Monday … 6 = Sunday.
 func weekday() -> int:
 	return (day - 1) % 7
+
+
+const MONTHS := ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+const MONTH_DAYS := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+const DAYS_PER_GAME_DAY := 6.5        ## one game day stands for about a week; a season is a quarter
+
+
+## {month: "MAR", dom: 14, month_index: 2}. Spring starts March 1.
+func date_parts(for_day := -1) -> Dictionary:
+	var d := day if for_day < 0 else for_day
+	var doy := int(floor(59.0 + (d - 1) * DAYS_PER_GAME_DAY)) % 365
+	var m := 0
+	while doy >= MONTH_DAYS[m]:
+		doy -= MONTH_DAYS[m]
+		m += 1
+	return {"month": MONTHS[m], "dom": doy + 1, "month_index": m}
+
+
+func date_text(for_day := -1) -> String:
+	var p := date_parts(for_day)
+	return "%s %d" % [p.month, p.dom]
+
+
+## Game days until the next annual meeting (0 = today).
+func days_to_meeting(every := 10) -> int:
+	return (every - day % every) % every
 
 
 func weekday_name() -> String:

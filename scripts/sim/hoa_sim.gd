@@ -6,6 +6,7 @@ extends RefCounted
 const Violations := preload("res://scripts/sim/violations.gd")
 const Residents := preload("res://scripts/sim/residents.gd")
 const Board := preload("res://scripts/sim/board.gd")
+const Encounters := preload("res://scripts/sim/encounters.gd")
 
 const ANNUAL_MEETING_EVERY := 10
 const ACTIONS := ["dismiss", "warning", "hearing", "fine"]
@@ -14,11 +15,16 @@ const OPEN_STATES := ["warning", "extended", "hearing", "fined", "disputed"]
 var violations := Violations.new()
 var residents := Residents.new()
 var board := Board.new()
+var encounters := Encounters.new()
 
 var properties: Dictionary = {}
 var cases: Dictionary = {}
 var politics: Dictionary = {}
 var projects: Array = []
+var premium := 0             ## insurance premium level 0-3, charged every other day
+var mods: Dictionary = {}     ## community modifiers (data/communities.json)
+var community_name := "Oak Meadow"
+var vendors: Dictionary = {"landscaper": 3, "pool": 3, "irrigation": 3}   ## service quality 0..5
 ## Today's work. lot id -> {kind: lawn|card|reinspect, source, violations, false_complaint, text, status}
 var assignments: Dictionary = {}
 var completed: Array = []
@@ -31,24 +37,51 @@ var agenda_log: Array = []
 const DOLLARS_PER_POINT := 690
 var rng := RandomNumberGenerator.new()
 var _house_count := 0
+var _board_calls: Array = []
 
 
 func setup(house_count: int) -> void:
 	_house_count = house_count
 	violations.load_data()
+	encounters.load_data()
 	rng.randomize()
+	# Reproducible sessions for QA: pass `-- seed=123` on the command line.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("seed="):
+			rng.seed = int(arg.substr(5))
 
 
-func new_term() -> void:
+func new_term(community: Dictionary = {}) -> void:
+	mods = (community.get("mods", {}) as Dictionary).duplicate()
+	# Difficulty shifts people and procedure, not the grind: hostility, ambiguity, cure odds, legal exposure.
+	var diff := Settings.difficulty - 1
+	if diff != 0:
+		mods.hostility = int(mods.get("hostility", 0)) - 8 * diff
+		mods.reliability_mult = float(mods.get("reliability_mult", 1.0)) - 0.05 * diff
+		mods.legal_start = int(mods.get("legal_start", 10)) + 8 * diff
+		mods.cure_bonus = -10 * diff
+		if diff > 0:
+			mods.complaints_bonus = int(mods.get("complaints_bonus", 0)) + 1
+	community_name = str(community.get("name", "Oak Meadow"))
 	properties = residents.create(_house_count)
+	var hostility := int(mods.get("hostility", 0))
+	if hostility != 0:
+		for h in properties:
+			properties[h].relationship = clampi(int(properties[h].relationship) + hostility, -100, 100)
 	cases = {}
 	politics = board.create()
+	if mods.has("board_bias"):
+		board.shift(politics, int(mods.board_bias))
+	politics.legal = int(mods.get("legal_start", 10))
 	projects = []
+	vendors = {"landscaper": 3, "pool": 3, "irrigation": 3}
+	premium = 0
 	assignments = {}
 	completed = []
 	discoverable = {}
 	ledger = []
 	agenda_log = []
+	encounters.last_seen = {}
 
 
 func load_world(world: Dictionary) -> void:
@@ -56,12 +89,17 @@ func load_world(world: Dictionary) -> void:
 	cases = (world.get("cases", {}) as Dictionary).duplicate(true)
 	politics = board.migrate((world.get("politics", board.create()) as Dictionary).duplicate(true))
 	projects = (world.get("projects", []) as Array).duplicate(true)
+	premium = int(world.get("premium", 0))
+	mods = (world.get("mods", {}) as Dictionary).duplicate()
+	community_name = str(world.get("community_name", "Oak Meadow"))
+	vendors = (world.get("vendors", {"landscaper": 3, "pool": 3, "irrigation": 3}) as Dictionary).duplicate()
 	assignments = (world.get("complaints", {}) as Dictionary).duplicate(true)
 	completed = (world.get("completed", []) as Array).duplicate()
 	discoverable = (world.get("discoverable", {}) as Dictionary).duplicate(true)
 	discovered_today = int(world.get("discovered_today", 0))
 	ledger = (world.get("ledger", []) as Array).duplicate(true)
 	agenda_log = (world.get("agenda_log", []) as Array).duplicate(true)
+	encounters.last_seen = (world.get("encounter_seen", {}) as Dictionary).duplicate()
 
 
 func save_into(world: Dictionary) -> void:
@@ -69,12 +107,17 @@ func save_into(world: Dictionary) -> void:
 	world.cases = cases.duplicate(true)
 	world.politics = politics.duplicate(true)
 	world.projects = projects.duplicate(true)
+	world.vendors = vendors.duplicate()
+	world.mods = mods.duplicate()
+	world.premium = premium
+	world.community_name = community_name
 	world.complaints = assignments.duplicate(true)
 	world.completed = completed.duplicate()
 	world.discoverable = discoverable.duplicate(true)
 	world.discovered_today = discovered_today
 	world.ledger = ledger.duplicate(true)
 	world.agenda_log = agenda_log.duplicate(true)
+	world.encounter_seen = encounters.last_seen.duplicate()
 
 
 # ---------------------------------------------------------------- money and agenda
@@ -92,6 +135,209 @@ func record_money(label: String, effects: Dictionary) -> void:
 func apply_effects(label: String, effects: Dictionary) -> void:
 	record_money(label, effects)
 	GameState.apply_effects(effects)
+
+
+## A director leans on the president. Returns {} or {member, member_index, house, text, choices, id}.
+## Calls are data (data/board_calls.json); the target house depends on the call.
+func pick_board_call(day: int) -> Dictionary:
+	if day < 3 or rng.randf() > 0.24:
+		return {}
+	if _board_calls.is_empty():
+		var file := FileAccess.open("res://data/board_calls.json", FileAccess.READ)
+		if file != null:
+			var parsed = JSON.parse_string(file.get_as_text())
+			if parsed is Array:
+				_board_calls = parsed
+	var options: Array = []
+	for call in _board_calls:
+		if day >= int(call.get("min_day", 0)):
+			options.append(call)
+	if options.is_empty():
+		return {}
+	var call: Dictionary = (options[rng.randi() % options.size()] as Dictionary).duplicate(true)
+	var member := -1
+	for i in Board.ROLES.size():
+		if str(Board.ROLES[i].priority) == str(call.priority):
+			member = i
+	var house := _call_target(str(call.target))
+	if house < 0 or member < 0:
+		return {}
+	var who: String = "%s (%s)" % [str(Board.ROLES[member].name), str(Board.ROLES[member].role)]
+	call.who_name = who
+	call.member_index = member
+	call.house = house
+	return call
+
+
+func _call_target(kind: String) -> int:
+	var pool: Array = []
+	for h in properties:
+		var group := Residents.group(properties[h])
+		match kind:
+			"critic":
+				if group in ["critic", "legal"]:
+					pool.append(int(h))
+			"friend":
+				if group in ["friend", "board"]:
+					pool.append(int(h))
+			"open_case":
+				if str(cases.get(h, {}).get("state", "")) in OPEN_STATES:
+					pool.append(int(h))
+			_:
+				pool.append(int(h))
+	return -1 if pool.is_empty() else int(pool[rng.randi() % pool.size()])
+
+
+## Applies a reply to a board call. Returns the result line.
+func apply_board_call(call: Dictionary, choice: Dictionary) -> String:
+	var fx: Dictionary = choice.get("effects", {})
+	var house := int(call.house)
+	var property: Dictionary = properties.get(house, {})
+	if fx.has("board_member"):
+		board.shift(politics, int(fx.board_member), int(call.member_index))
+	if fx.has("legal"):
+		board.add_legal(politics, int(fx.legal))
+	if fx.has("relationship") and not property.is_empty():
+		Residents.shift(property, int(fx.relationship), GameState.day, "board pressure")
+		properties[house] = property
+	if choice.has("vendor"):
+		apply_vendor(choice.vendor)
+	var group := Residents.group(property)
+	match str(fx.get("record", "")):
+		"overlook":
+			board.record(politics, group, false, true)   # a real violation excused for a friend
+			_note_favored(house)
+		"press":
+			board.record(politics, group, true, true)
+	var plain := {}
+	for key in ["budget", "happiness", "power"]:
+		if fx.has(key):
+			plain[key] = int(fx[key])
+	if not plain.is_empty():
+		apply_effects("Board request", plain)
+	record_agenda(str(call.get("who_name", "Board")), str(choice.get("label", "")))
+	return str(choice.get("result", "")).replace("{owner}", owner_of(house))
+
+
+## Policy deltas from an agenda choice, e.g. {"premium": 1}.
+func apply_policy(deltas: Dictionary) -> void:
+	premium = clampi(premium + int(deltas.get("premium", 0)), 0, 3)
+
+
+## Vendor deltas from an agenda choice, e.g. {"landscaper": -1}.
+func apply_vendor(deltas: Dictionary) -> void:
+	for key in deltas:
+		vendors[str(key)] = clampi(int(vendors.get(str(key), 3)) + int(deltas[key]), 0, 5)
+
+
+## Lawn growth multiplier: a neglectful landscaper means taller grass on the whole street.
+func landscaper_growth() -> float:
+	return 1.0 + (3 - int(vendors.get("landscaper", 3))) * 0.08
+
+
+## Remembers an approved architectural request. A few days later the architectural
+## committee gets a report that the work does not match: inspect and compare.
+func register_arc(house: int, arc: Dictionary) -> void:
+	var property: Dictionary = properties.get(house, {})
+	if property.is_empty():
+		return
+	var pending: Array = property.get("arc_pending", [])
+	var item: Dictionary = arc.duplicate(true)
+	item.due = GameState.day + 3 + rng.randi() % 3
+	pending.append(item)
+	property.arc_pending = pending
+	properties[house] = property
+
+
+## Complaints created from due approvals. Returns house -> assignment.
+func _arc_assignments(day: int) -> Dictionary:
+	var result := {}
+	for house in properties:
+		var property: Dictionary = properties[house]
+		var pending: Array = property.get("arc_pending", [])
+		if pending.is_empty():
+			continue
+		var keep: Array = []
+		for arc in pending:
+			if int(arc.get("due", 0)) > day or result.has(int(house)) or str(cases.get(house, {}).get("state", "")) in OPEN_STATES:
+				keep.append(arc)
+				continue
+			var def: Dictionary = violations.get_def(str(arc.violation))
+			if def.is_empty():
+				continue
+			var built_wrong := rng.randf() < 0.65
+			var item := violations.make_allegation(def, 1.0, rng, 1 if built_wrong else 0)
+			item.borderline = false
+			item.complaint = "Approved: %s. Reported as installed: %s." % [str(arc.approved), str(arc.built)]
+			if not built_wrong:
+				item.hint = "The installed work matches the approved request."
+			result[int(house)] = {"kind": "card", "source": "arc", "complainant": "Architectural committee",
+					"violations": [item], "false_complaint": not built_wrong, "text": str(item.complaint), "status": "assigned"}
+		property.arc_pending = keep
+		properties[house] = property
+	return result
+
+
+## Picks a close-up encounter for a ruling, or {} when none plays. `trigger` is the
+## action: warning | fine | hearing | dismiss | reinspect.
+func pick_encounter(house: int, trigger: String, season: int) -> Dictionary:
+	var enc := encounters.pick({"trigger": trigger, "day": GameState.day, "season": season,
+			"property": property_of(house), "fairness_gap": board.fairness_gap(politics),
+			"favored": favored_name(house)}, rng)
+	if not enc.is_empty():
+		encounters.mark_played(str(enc.id), GameState.day)
+	return enc
+
+
+## Name of a friend or board-member household whose real violation was let slide, if any
+## (and who is not the household in front of you). Residents quote it back at you.
+func favored_name(house: int) -> String:
+	var names: Array = politics.get("favored", [])
+	for n in names:
+		if str(n) != owner_of(house):
+			return str(n)
+	return ""
+
+
+func _note_favored(house: int) -> void:
+	var names: Array = politics.get("favored", [])
+	var who := owner_of(house)
+	if not who in names:
+		names.append(who)
+	if names.size() > 4:
+		names.pop_front()
+	politics.favored = names
+
+
+## Applies the chosen reply once. Returns {score, slow} for the caller (street penalty).
+func apply_encounter_outcome(house: int, enc: Dictionary, choice: Dictionary, address: String) -> Dictionary:
+	var outcome: Dictionary = choice.get("outcome", {})
+	var property: Dictionary = properties.get(house, {})
+	var shift := int(outcome.get("relationship", 0))
+	if shift != 0 and not property.is_empty():
+		Residents.shift(property, shift, GameState.day, "encounter: %s" % str(enc.get("id", "")))
+		properties[house] = property
+	if int(outcome.get("legal", 0)) != 0:
+		board.add_legal(politics, int(outcome.legal))
+	if int(outcome.get("board", 0)) != 0:
+		board.shift(politics, int(outcome.board))
+	var effects := {}
+	for key in ["happiness", "power", "budget"]:
+		if int(outcome.get(key, 0)) != 0:
+			effects[key] = int(outcome[key])
+	if not effects.is_empty():
+		apply_effects("Incident · %s" % address, effects)
+	if str(enc.get("footer", "")).contains("NEXT MEETING"):
+		var gossip: Array = politics.get("gossip", [])
+		gossip.append(address)
+		politics.gossip = gossip
+	if str(enc.get("footer", "")).contains("INSURANCE"):
+		apply_effects("Insurance claim", {"budget": -3})
+	if str(enc.get("footer", "")).contains("ATTORNEY"):
+		board.add_legal(politics, 3)
+	if str(enc.get("footer", "")) != "":
+		record_agenda("Incident · %s" % address, str(choice.get("label", "")))
+	return {"score": int(outcome.get("score", 0)), "slow": float(outcome.get("slow", 0.0))}
 
 
 func record_agenda(who: String, choice: String) -> void:
@@ -153,11 +399,29 @@ func start_day(day: int, season: int, weekday: int) -> Dictionary:
 	report.append_array(_process_projects())
 	report.append_array(_process_politics(day))
 	var meeting: Array = []
+	var meeting_title := "ANNUAL MEETING"
 	if day > 1 and day % ANNUAL_MEETING_EVERY == 0:
 		meeting = board.election(politics, int(GameState.stats.get("power", 50)), rng)
+	elif _recall_due(day):
+		# Rare and dramatic: an emergency meeting after a recall petition.
+		politics.last_recall = day
+		meeting = board.election(politics, int(GameState.stats.get("power", 50)), rng)
+		meeting_title = "RECALL PETITION"
+		report.append("A recall petition has been filed. An emergency meeting is called.")
 	_daily_drift(day)
 	_generate_assignments(day, season, weekday)
-	return {"report": report, "hearings": hearings, "meeting": meeting}
+	return {"report": report, "hearings": hearings, "meeting": meeting, "meeting_title": meeting_title}
+
+
+## Three directors under 30 support plus real legal exposure, no more than once per 8 days.
+func _recall_due(day: int) -> bool:
+	if day < 5 or day - int(politics.get("last_recall", -99)) < 8 or day % ANNUAL_MEETING_EVERY >= ANNUAL_MEETING_EVERY - 1:
+		return false
+	var angry := 0
+	for m in politics.board:
+		if int(m.support) < 30:
+			angry += 1
+	return angry >= 3 and legal_risk() >= 55
 
 
 ## Stats settle back toward balance, so good administration can last and neither
@@ -168,7 +432,7 @@ func _daily_drift(day: int) -> void:
 	var power: int = GameState.stats.get("power", 50)
 	var happy: int = GameState.stats.get("happiness", 50)
 	var budget: int = GameState.stats.get("budget", 50)
-	var delta := {"budget": 1}   # dues
+	var delta := {"budget": int(mods.get("dues", 1))}   # dues
 	if budget > 60:
 		delta.budget = -ceili(float(budget - 60) / 3.0)   # reserves get spent
 	if power > 55:
@@ -179,6 +443,15 @@ func _daily_drift(day: int) -> void:
 		delta.happiness = 2
 	elif happy > 65:
 		delta.happiness = -1
+	if premium > 0 and day % 2 == 0:
+		delta.budget = int(delta.get("budget", 0)) - premium
+	# Summer pool service: a poor vendor lowers mood, a good one raises it.
+	if GameState.season() == 1:
+		var pool := int(vendors.get("pool", 3))
+		if pool <= 1:
+			delta.happiness = int(delta.get("happiness", 0)) - 1
+		elif pool >= 4:
+			delta.happiness = int(delta.get("happiness", 0)) + 1
 	apply_effects("HOA dues" if int(delta.get("budget", 0)) >= 0 else "Reserve spending", delta)
 	for i in (politics.board as Array).size():
 		var support: int = int(politics.board[i].support)
@@ -211,12 +484,18 @@ func _generate_assignments(day: int, season: int, weekday: int) -> void:
 			assignments[int(house)] = {"kind": "reinspect", "source": "sweep", "violations": remaining,
 					"false_complaint": result == "fixed", "text": "Cure period ended. Check the property.",
 					"status": "assigned", "result": result}
-	var count := mini(4 + (day - 1) / 3, 8) + (1 if weekend else 0)
+	var arc_cases := _arc_assignments(day)
+	for house in arc_cases:
+		if not assignments.has(int(house)):
+			assignments[int(house)] = arc_cases[house]
+	var count := mini(4 + (day - 1) / 3, 8) + (1 if weekend else 0) + (int(mods.get("complaints_bonus", 0)) if day > 2 else 0)
 	var order: Array = range(_house_count)
 	var key := {}
 	for h in order:
 		var p: Dictionary = properties.get(h, {})
-		key[h] = rng.randf() - 0.15 * int(p.get("repeat_count", 0)) - (0.2 if int(p.get("compliance", 60)) < 40 else 0.0)
+		# Neighbors who are on bad terms with the board get reported more often.
+		key[h] = rng.randf() - 0.15 * int(p.get("repeat_count", 0)) - (0.2 if int(p.get("compliance", 60)) < 40 else 0.0) \
+				- maxf(0.0, -float(p.get("relationship", 0))) * 0.002
 	order.sort_custom(func(a, b): return key[a] < key[b])
 	var picked := 0
 	for h in order:
@@ -243,11 +522,13 @@ func _make_complaint(house: int, day: int, season: int, weekend: bool) -> Dictio
 	var property: Dictionary = properties.get(house, {})
 	var source := _pick_source(house, day)
 	var reliability := violations.source_reliability(source)
+	reliability = clampf(reliability * float(mods.get("reliability_mult", 1.0)), 0.0, 1.0)
 	if day <= 2:
 		reliability = maxf(reliability, 0.88)
 	if Residents.has_trait(property, "str_owner") or Residents.has_trait(property, "repeat_offender"):
 		reliability = minf(1.0, reliability + 0.1)
 	var pool := violations.available(season, weekend)
+	pool.append_array(_vendor_biased(pool))
 	var count := 1 if day <= 2 else 1 + (1 if rng.randf() < 0.3 else 0) + (1 if day > 6 and rng.randf() < 0.12 else 0)
 	var allegations: Array = []
 	var seen: Array = []
@@ -268,6 +549,22 @@ func _make_complaint(house: int, day: int, season: int, weekend: bool) -> Dictio
 		complainant = "%s (neighbor)" % _random_neighbor(house)
 	return {"kind": kind, "source": source, "complainant": complainant, "violations": allegations,
 			"false_complaint": false_complaint, "text": str(allegations[0].complaint), "status": "assigned"}
+
+
+## Neglected vendors show up as more of the problems they are paid to prevent.
+func _vendor_biased(pool: Array) -> Array:
+	var extra: Array = []
+	var land := int(vendors.get("landscaper", 3))
+	var water := int(vendors.get("irrigation", 3))
+	for item in pool:
+		var id := str(item.id)
+		if land < 3 and id in ["tall_grass", "shrubs", "weeds", "landscaping"]:
+			for _i in 3 - land:
+				extra.append(item)
+		if water < 3 and id in ["dead_lawn", "weeds"]:
+			for _i in 3 - water:
+				extra.append(item)
+	return extra
 
 
 func _random_neighbor(house: int) -> String:
@@ -297,7 +594,7 @@ func _pick_source(house: int, day: int) -> String:
 
 func _roll_reinspection(house: int, record: Dictionary) -> String:
 	var property: Dictionary = properties.get(house, {})
-	var chance := Residents.compliance_chance(property, 10 if str(record.state) == "fined" else 0)
+	var chance := Residents.compliance_chance(property, (10 if str(record.state) == "fined" else 0) + int(mods.get("cure_bonus", 0)))
 	var roll := rng.randi_range(0, 99)
 	if roll < chance:
 		return "fixed"
@@ -430,6 +727,8 @@ func rule_case(house: int, action: String, cited: Array, evidence: Dictionary) -
 		board.shift(politics, -2)
 	var group := Residents.group(property)
 	board.record(politics, group, action != "dismiss", not false_complaint)
+	if action == "dismiss" and not false_complaint and group in ["friend", "board"]:
+		_note_favored(house)
 	if group == "board":
 		var seat := int(property.get("seat", house % 5))
 		if action != "dismiss":
@@ -567,18 +866,41 @@ func build_hearing(house: int) -> Dictionary:
 		argument = "I'll fix it, I promise. I'm sorry, honestly."
 	elif Residents.has_trait(property, "anti_hoa"):
 		argument = "This entire proceeding is an overreach and a scam."
+	# Occasionally a hearing throws a curveball. It nudges the case and is remembered.
+	var twist := {}
+	if rng.randf() < 0.22:
+		var twists := [
+			{"text": "A neighbor testifies they watched this go on for weeks.", "strength": 0.12},
+			{"text": "The homeowner produces an approval letter from 2019. It is slightly coffee-stained.", "strength": -0.2},
+			{"text": "A doorbell camera video appears. It is mostly of a raccoon, but the violation is in frame.", "strength": 0.15},
+			{"text": "The homeowner's attorney arrives with a binder and a very calm expression.", "strength": -0.1},
+			{"text": "A surprise witness, aged nine, states the rules are 'kind of dumb.' The room is silent.", "strength": -0.06},
+			{"text": "The photographs are projected on the wall. The projector is also showing last week's potluck.", "strength": 0.04},
+		]
+		twist = twists[rng.randi() % twists.size()]
+		record.twist = twist
+		cases[house] = record
 	var recommendation := "fine" if strength >= 0.6 else ("warning" if strength >= 0.3 else "dismiss")
 	return {"house": house, "owner": owner_of(house), "violations": labels, "rules": rules, "argument": argument,
 			"strength": strength, "quality": int(record.get("evidence_quality", 0)),
 			"recommendation": recommendation, "fine_amount": int(record.get("fine_amount", 100)),
-			"relationship": relationship_text(house)}
+			"relationship": relationship_text(house), "twist": str(twist.get("text", "")),
+			"board": _board_roster()}
+
+
+func _board_roster() -> Array:
+	var roster: Array = []
+	for i in Board.ROLES.size():
+		var role: Dictionary = Board.ROLES[i]
+		roster.append("%s · %s" % [str(role.name), str(role.role)])
+	return roster
 
 
 ## recommendation: dismiss | warning | fine. `present_evidence` adds weight when the file is strong.
 func hold_hearing(house: int, recommendation: String, present_evidence: bool) -> Dictionary:
 	var record: Dictionary = cases[house]
 	var property: Dictionary = properties.get(house, {})
-	var strength := float(record.get("strength", 0.0))
+	var strength := clampf(float(record.get("strength", 0.0)) + float((record.get("twist", {}) as Dictionary).get("strength", 0.0)), 0.0, 1.0)
 	if present_evidence:
 		strength = clampf(strength + (0.12 if int(record.get("evidence_quality", 0)) >= 60 else -0.04), 0.0, 1.0)
 	var lines: Array = []
@@ -705,6 +1027,23 @@ func _process_politics(day: int) -> Array:
 		lines.append("LEGAL COUNSEL: %s" % board.counsel_warning(politics))
 	else:
 		board.add_legal(politics, -2)
+	# Incidents that "may come up at the next meeting" actually do.
+	var gossip: Array = politics.get("gossip", [])
+	for where in gossip:
+		lines.append("The board discussed the incident at %s. Opinions were shared." % str(where))
+		board.shift(politics, -1)
+		board.add_legal(politics, 1)
+	politics.gossip = []
+	# Escalation ladder: counsel warning -> attorney letter -> lawsuit settlement.
+	if legal_risk() >= 80 and int(politics.get("letter_day", -99)) < day - 6:
+		politics.letter_day = day
+		apply_effects("Attorney letter response", {"budget": -3})
+		lines.append("ATTORNEY LETTER: a homeowner's lawyer cites inconsistent enforcement. Responding cost $2,000.")
+	if int(GameState.stats.get("happiness", 50)) <= 15 and day - int(politics.get("revolt_day", -99)) >= 6:
+		politics.revolt_day = day
+		GameState.apply_effects({"power": -3})
+		board.shift(politics, -3)
+		lines.append("HOMEOWNER REVOLT: a petition circulates. The newsletter comments section is on fire.")
 	if legal_risk() >= 100:
 		apply_effects("Lawsuit settlement", {"budget": -36, "power": -8})
 		politics.legal = 40

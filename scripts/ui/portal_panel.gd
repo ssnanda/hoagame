@@ -12,6 +12,7 @@ var sim
 var street
 var _body: VBoxContainer
 var _tab := "overview"
+var start_tab := "overview"
 
 
 func setup(simulation, street_node) -> void:
@@ -20,6 +21,7 @@ func setup(simulation, street_node) -> void:
 
 
 func _ready() -> void:
+	_tab = start_tab
 	var modal := UiKit.modal(Vector2(720, 1100), Vector2(660, 960), "")
 	var root: Panel = modal.root
 	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
@@ -46,6 +48,7 @@ func _ready() -> void:
 	var close := UiKit.button("CLOSE", 26, 66)
 	close.pressed.connect(func(): closed.emit())
 	footer.add_child(close)
+	footer.add_child(UiKit.label("Community management powered by Wozig", 14, UiKit.MUTED, true))
 	_render()
 
 
@@ -77,7 +80,7 @@ func _overview() -> void:
 	_body.add_child(UiKit.label("Treasury  $%s" % _money(int(stats.get("budget", 0))), 30))
 	_body.add_child(UiKit.label("Community  %d" % int(stats.get("happiness", 0)), 26))
 	_body.add_child(UiKit.label("Authority  %d" % int(stats.get("power", 0)), 26))
-	_body.add_child(UiKit.label("Board support  %d%%    Legal risk  %d%%" % [sim.board_support(), sim.legal_risk()], 24, UiKit.ACCENT))
+	_body.add_child(UiKit.label("Board mood  %s    Counsel  %s" % [sim.board.outlook(sim.politics, GameState.stats, GameState.day), sim.board.counsel_mood(sim.politics)], 22, UiKit.ACCENT))
 	_body.add_child(UiKit.label("Open cases  %d" % sim.open_case_count(), 24))
 	var enforced := 0
 	var cases := 0
@@ -108,21 +111,37 @@ func _overview() -> void:
 		_body.add_child(UiKit.label("\"%s\"" % warning, 22, UiKit.BAD))
 
 
+## Open cases grouped by what the player has to do next, not as a spreadsheet.
 func _cases() -> void:
-	var rows := 0
+	var groups := {"ready": [], "cure": [], "hearing": [], "disputed": [], "fined": []}
 	for house in sim.cases:
 		var record: Dictionary = sim.cases[house]
 		var state := str(record.get("state", ""))
 		if not state in sim.OPEN_STATES:
 			continue
-		rows += 1
-		var due := ""
-		if state in ["warning", "extended", "fined"]:
-			due = " · due day %d" % int(record.get("cure_due", 0))
+		var h := int(house)
+		if sim.assignments.has(h) and str(sim.assignments[h].get("kind", "")) == "reinspect" and not h in sim.completed:
+			groups.ready.append([h, "reinspect today"])
 		elif state == "hearing":
-			due = " · hearing day %d" % int(record.get("hearing_day", 0))
-		_body.add_child(UiKit.label("%s — %s%s" % [street.lot_address(int(house)), state.to_upper(), due], 21))
-	if rows == 0:
+			groups.hearing.append([h, "hearing day %d" % int(record.get("hearing_day", 0))])
+		elif state == "disputed":
+			groups.disputed.append([h, "owner disputes"])
+		elif state == "fined":
+			groups.fined.append([h, "fined · cure by day %d" % int(record.get("cure_due", 0))])
+		else:
+			var left := maxi(int(record.get("cure_due", 0)) - GameState.day, 0)
+			groups.cure.append([h, "%d day%s to cure" % [left, "" if left == 1 else "s"]])
+	var total := 0
+	for key in [["ready", "READY FOR REINSPECTION"], ["cure", "AWAITING CURE"], ["hearing", "WAITING FOR HEARING"],
+			["disputed", "DISPUTED"], ["fined", "FINED"]]:
+		var rows: Array = groups[key[0]]
+		if rows.is_empty():
+			continue
+		total += rows.size()
+		_body.add_child(UiKit.section("%s · %d" % [str(key[1]), rows.size()]))
+		for row in rows:
+			_body.add_child(UiKit.label("%s — %s" % [street.lot_address(int(row[0])), str(row[1])], 21))
+	if total == 0:
 		_body.add_child(UiKit.label("No open cases. Enjoy it while it lasts.", 22, UiKit.MUTED))
 
 
@@ -175,6 +194,7 @@ static func _money(points: int) -> String:
 
 
 func _finance() -> void:
+	_body.add_child(UiKit.label("Insurance premium level  %d / 3" % int(sim.premium), 20, UiKit.MUTED))
 	var total := 0
 	for entry in sim.ledger:
 		total += int(entry.dollars)
@@ -203,6 +223,11 @@ func _directory() -> void:
 
 
 func _work_orders() -> void:
+	_body.add_child(UiKit.section("VENDORS"))
+	for key in sim.vendors:
+		var q: int = int(sim.vendors[key])
+		_body.add_child(UiKit.label("%s  %s" % [str(key).capitalize(), "★".repeat(q) + "☆".repeat(5 - q)], 20, UiKit.GOOD if q >= 3 else UiKit.BAD))
+	_body.add_child(UiKit.section("WORK ORDERS"))
 	if sim.projects.is_empty():
 		_body.add_child(UiKit.label("No active work orders. Approve a vendor bid or community project to start one.", 20, UiKit.MUTED))
 	for project in sim.projects:

@@ -7,7 +7,7 @@ const FIRST_NAMES := ["Avery", "Jordan", "Maya", "Noah", "Priya", "Mateo", "Nora
 const LAST_NAMES := ["Parker", "Nguyen", "Patel", "Robinson", "Garcia", "Wilson", "Okafor", "Chen", "Miller",
 		"Henderson", "Johnson", "Brown", "Davis", "Martinez", "Kowalski", "Singh", "Larsen", "Baptiste"]
 const TRAITS := ["friendly", "rule_follower", "chronic_complainer", "board_insider", "anti_hoa", "litigious",
-		"elderly", "new_homeowner", "investor_landlord", "str_owner", "perfectionist", "gossip", "repeat_offender"]
+		"elderly", "new_homeowner", "investor_landlord", "str_owner", "perfectionist", "gossip", "repeat_offender", "confrontational", "passive_aggressive", "paranoid", "eccentric", "forgetful"]
 const TRAIT_BLURBS := {
 	"friendly": "Waves at everyone, including the inspector.",
 	"rule_follower": "Has read the declaration. Twice.",
@@ -22,6 +22,11 @@ const TRAIT_BLURBS := {
 	"perfectionist": "Their lawn has been ruled and measured by themselves.",
 	"gossip": "Everything you do is common knowledge by dinner.",
 	"repeat_offender": "The file is thick and the excuses are creative.",
+	"confrontational": "Treats every doorbell as the opening round.",
+	"passive_aggressive": "'No, it's fine!' is never fine.",
+	"paranoid": "Is sure the inspector is a county spy.",
+	"eccentric": "Has opinions about gnomes and the moon.",
+	"forgetful": "Means well. Forgets the notice by Thursday.",
 }
 
 
@@ -44,6 +49,8 @@ func create(count: int) -> Dictionary:
 			rel += 10
 		if "litigious" in traits:
 			rel -= 10
+		if "confrontational" in traits or "paranoid" in traits:
+			rel -= 12
 		result[house] = {
 			"owner": "%s %s" % [FIRST_NAMES[rng.randi() % FIRST_NAMES.size()], LAST_NAMES[rng.randi() % LAST_NAMES.size()]],
 			"traits": traits,
@@ -127,6 +134,10 @@ static func compliance_chance(property: Dictionary, bonus := 0) -> int:
 		chance -= 8
 	if has_trait(property, "repeat_offender"):
 		chance -= 15
+	if has_trait(property, "forgetful"):
+		chance -= 10
+	if has_trait(property, "confrontational"):
+		chance -= 6
 	if has_trait(property, "elderly"):
 		chance -= 5
 	return clampi(chance, 8, 95)
@@ -139,6 +150,10 @@ static func dispute_chance(property: Dictionary) -> float:
 		chance += 0.25
 	if has_trait(property, "anti_hoa"):
 		chance += 0.12
+	if has_trait(property, "confrontational") or has_trait(property, "paranoid"):
+		chance += 0.1
+	if has_trait(property, "passive_aggressive"):
+		chance += 0.04
 	if int(property.get("relationship", 0)) < -20:
 		chance += 0.1
 	if has_trait(property, "friendly"):

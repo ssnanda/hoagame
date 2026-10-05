@@ -18,6 +18,7 @@ var angle := 0.0            ## smoothed heading
 var phase := 0.0            ## gait phase
 var moving := false
 var cart := false
+var speed_mult := 1.0       ## <1 while slowed by an incident (soaked, chasing a dog)
 
 
 func speed_fraction() -> float:
@@ -29,7 +30,7 @@ func update(delta: float, move: Vector2, hood: Neighborhood, obstacles: Array, c
 	var target := Vector2.ZERO
 	if move.length() > DEADZONE:
 		var strength := (move.length() - DEADZONE) / (1.0 - DEADZONE)
-		target = move.normalized() * WALK_SPEED * strength * (CART_SPEED if cart else 1.0)
+		target = move.normalized() * WALK_SPEED * strength * (CART_SPEED if cart else 1.0) * speed_mult
 	velocity = velocity.lerp(target, 1.0 - exp(-ACCEL * delta))
 	if velocity.length() < 4.0 and target == Vector2.ZERO:
 		velocity = Vector2.ZERO
